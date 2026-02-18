@@ -11,7 +11,7 @@ if [ -f "$(dirname "$0")/../.env" ]; then
     set +a
 fi
 
-BASE_URL="${COMPRESR_BASE_URL:-https://api.compresr.ai}"
+BASE_URL="https://api.compresr.ai"
 API_KEY="${COMPRESR_API_KEY:?Error: Set COMPRESR_API_KEY in ../.env}"
 
 echo "Batch compressing 3 contexts..."
@@ -26,6 +26,6 @@ curl -s -X POST "$BASE_URL/api/compress/batch" \
       "Machine learning is a subset of artificial intelligence that enables systems to automatically learn and improve from experience.",
       "Context compression helps reduce API costs by intelligently removing redundant information while preserving semantic meaning."
     ],
-    "compression_model_name": "cmprsr_v1",
+    "compression_model_name": "A_CMPRSR_V1",
     "target_compression_ratio": 0.5
   }' | jq .

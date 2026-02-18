@@ -40,7 +40,8 @@ class CompressRequest(BaseModel):
     """Request to compress a context."""
 
     context: str = Field(..., min_length=1, description="Context text to compress")
-    compression_model_name: str = Field(..., description="Compression model (e.g., 'cmprsr_v1')")
+    compression_model_name: str = Field(..., description="Compression model (e.g., 'A_CMPRSR_V1')")
+    question: Optional[str] = Field(None, min_length=1, description="Question for question-specific models")
     target_compression_ratio: Optional[float] = Field(
         None, ge=CompressionConfig.MIN_RATIO, le=CompressionConfig.MAX_RATIO
     )
@@ -51,7 +52,8 @@ class BatchCompressRequest(BaseModel):
     """Request to compress multiple contexts."""
 
     contexts: List[str] = Field(..., min_length=1, max_length=100)
-    compression_model_name: str = Field(..., description="Compression model (e.g., 'cmprsr_v1')")
+    compression_model_name: str = Field(..., description="Compression model (e.g., 'A_CMPRSR_V1')")
+    question: Optional[str] = Field(None, min_length=1, description="Question for question-specific models")
     target_compression_ratio: Optional[float] = Field(
         None, ge=CompressionConfig.MIN_RATIO, le=CompressionConfig.MAX_RATIO
     )

@@ -1,11 +1,11 @@
 """
-Integration Tests for CompressionClient
+Integration Tests for CompressionClient (Agnostic Compression)
 
-Tests for the CompressionClient which handles context compression.
+Tests for the CompressionClient which handles context compression 
+without requiring a question (agnostic compression).
 
 Run with:
-    pytest tests/test_compression_client.py --env=dev -v
-    pytest tests/test_compression_client.py --env=prod -v
+    pytest tests/integration/test_compression_client.py -v
 """
 
 import pytest
@@ -14,7 +14,7 @@ from compresr import CompressionClient
 from compresr.exceptions import RateLimitError
 from compresr.schemas import CompressResponse, StreamChunk
 
-DEFAULT_COMPRESSION_MODEL = "cmprsr_v1"
+DEFAULT_COMPRESSION_MODEL = "A_CMPRSR_V1"
 
 
 # =============================================================================
@@ -23,19 +23,19 @@ DEFAULT_COMPRESSION_MODEL = "cmprsr_v1"
 
 
 @pytest.fixture
-def admin_client(admin_api_key, base_url):
+def admin_client(admin_api_key):
     """Create CompressionClient with ADMIN key."""
     if not admin_api_key:
         pytest.skip("Admin API key not available")
-    return CompressionClient(api_key=admin_api_key, base_url=base_url)
+    return CompressionClient(api_key=admin_api_key)
 
 
 @pytest.fixture
-def user_client(user_api_key, base_url):
+def user_client(user_api_key):
     """Create CompressionClient with USER key (rate limited)."""
     if not user_api_key:
         pytest.skip("User API key not available")
-    return CompressionClient(api_key=user_api_key, base_url=base_url)
+    return CompressionClient(api_key=user_api_key)
 
 
 # =============================================================================
@@ -187,46 +187,6 @@ class TestResponseStructure:
 
 
 # =============================================================================
-# Rate Limit Tests
-# =============================================================================
-
-
-class TestRateLimit:
-    """Tests for rate limit behavior."""
-
-    @pytest.mark.skip(
-        reason="Rate limit test requires user API key and proper rate limiting configuration"
-    )
-    def test_rate_limit_triggered(self, user_client):
-        """Test that rate limit is triggered after rapid requests."""
-        # Skip if user client not available
-        if not user_client:
-            pytest.skip("User API key not configured")
-
-        responses = []
-        rate_limited = False
-
-        for i in range(10):
-            try:
-                response = user_client.compress(
-                    context=f"Test context {i} for rate limit.",
-                    compression_model_name=DEFAULT_COMPRESSION_MODEL,
-                )
-                responses.append(response)
-            except RateLimitError:
-                rate_limited = True
-                break
-            except Exception as e:
-                if "rate limit" in str(e).lower() or "429" in str(e):
-                    rate_limited = True
-                    break
-
-        # Should either hit rate limit or successfully make some requests
-        assert (
-            rate_limited or len(responses) > 0
-        ), "No requests succeeded and no rate limit was triggered"
-
-
 # =============================================================================
 # Error Handling Tests
 # =============================================================================

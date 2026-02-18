@@ -35,7 +35,7 @@ class CompressionClient(HTTPClient):
 
         response = client.compress(
             context="Your long context text...",
-            compression_model_name="cmprsr_v1"
+            compression_model_name="A_CMPRSR_V1"
         )
         print(response.data.compressed_context)
     """
@@ -45,7 +45,7 @@ class CompressionClient(HTTPClient):
     def compress(
         self,
         context: str,
-        compression_model_name: str = "cmprsr_v1",
+        compression_model_name: str = "A_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> CompressResponse:
         """
@@ -53,7 +53,7 @@ class CompressionClient(HTTPClient):
 
         Args:
             context: Context text to compress
-            compression_model_name: Compression model to use (default: "cmprsr_v1")
+            compression_model_name: Compression model to use (default: "A_CMPRSR_V1")
             target_compression_ratio: Compression ratio 0.1-0.9 (percentage to REMOVE - e.g., 0.3 removes 30%)
 
         Returns:
@@ -74,7 +74,7 @@ class CompressionClient(HTTPClient):
     def compress_batch(
         self,
         contexts: List[str],
-        compression_model_name: str = "cmprsr_v1",
+        compression_model_name: str = "A_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> BatchCompressResponse:
         """
@@ -82,7 +82,7 @@ class CompressionClient(HTTPClient):
 
         Args:
             contexts: List of contexts to compress (max 100)
-            compression_model_name: Compression model to use (default: "cmprsr_v1")
+            compression_model_name: Compression model to use (default: "A_CMPRSR_V1")
             target_compression_ratio: Target ratio (optional)
 
         Returns:
@@ -103,7 +103,7 @@ class CompressionClient(HTTPClient):
     def compress_stream(
         self,
         context: str,
-        compression_model_name: str = "cmprsr_v1",
+        compression_model_name: str = "A_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> Generator[StreamChunk, None, None]:
         """
@@ -111,7 +111,7 @@ class CompressionClient(HTTPClient):
 
         Args:
             context: Context text to compress
-            compression_model_name: Compression model to use (default: "cmprsr_v1")
+            compression_model_name: Compression model to use (default: "A_CMPRSR_V1")
             target_compression_ratio: Target ratio (optional)
 
         Yields:
@@ -135,7 +135,7 @@ class CompressionClient(HTTPClient):
     async def compress_async(
         self,
         context: str,
-        compression_model_name: str = "cmprsr_v1",
+        compression_model_name: str = "A_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> CompressResponse:
         """
@@ -143,7 +143,7 @@ class CompressionClient(HTTPClient):
 
         Args:
             context: Context text to compress
-            compression_model_name: Compression model to use (default: "cmprsr_v1")
+            compression_model_name: Compression model to use (default: "A_CMPRSR_V1")
             target_compression_ratio: Target ratio (optional)
 
         Returns:
@@ -164,7 +164,7 @@ class CompressionClient(HTTPClient):
     async def compress_batch_async(
         self,
         contexts: List[str],
-        compression_model_name: str = "cmprsr_v1",
+        compression_model_name: str = "A_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> BatchCompressResponse:
         """
@@ -172,7 +172,7 @@ class CompressionClient(HTTPClient):
 
         Args:
             contexts: List of contexts to compress (max 100)
-            compression_model_name: Compression model to use (default: "cmprsr_v1")
+            compression_model_name: Compression model to use (default: "A_CMPRSR_V1")
             target_compression_ratio: Target ratio (optional)
 
         Returns:

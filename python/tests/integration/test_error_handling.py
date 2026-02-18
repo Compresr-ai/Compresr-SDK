@@ -11,9 +11,9 @@ from compresr.exceptions import AuthenticationError, CompresrError, ValidationEr
 
 
 @pytest.fixture
-def client_with_invalid_key(base_url):
+def client_with_invalid_key():
     """Create client with invalid API key."""
-    return CompressionClient(api_key="cmp_invalid_key_12345", base_url=base_url)
+    return CompressionClient(api_key="cmp_invalid_key_12345")
 
 
 class TestAuthenticationErrors:
@@ -23,13 +23,13 @@ class TestAuthenticationErrors:
         """Test that invalid API key raises AuthenticationError."""
         with pytest.raises(AuthenticationError):
             client_with_invalid_key.compress(
-                context="Test context", compression_model_name="cmprsr_v1"
+                context="Test context", compression_model_name="A_CMPRSR_V1"
             )
 
-    def test_missing_api_key(self, base_url):
+    def test_missing_api_key(self):
         """Test that missing API key raises AuthenticationError."""
         with pytest.raises(AuthenticationError):
-            CompressionClient(api_key="", base_url=base_url)
+            CompressionClient(api_key="")
 
 
 class TestValidationErrors:
@@ -38,14 +38,14 @@ class TestValidationErrors:
     def test_empty_context(self, admin_client):
         """Test that empty context raises ValidationError."""
         with pytest.raises(ValidationError):
-            admin_client.compress(context="", compression_model_name="cmprsr_v1")
+            admin_client.compress(context="", compression_model_name="A_CMPRSR_V1")
 
     def test_invalid_compression_ratio_high(self, admin_client):
         """Test that ratio > 1.0 raises ValidationError."""
         with pytest.raises(ValidationError):
             admin_client.compress(
                 context="Test context",
-                compression_model_name="cmprsr_v1",
+                compression_model_name="A_CMPRSR_V1",
                 target_compression_ratio=1.5,
             )
 
@@ -54,7 +54,7 @@ class TestValidationErrors:
         with pytest.raises(ValidationError):
             admin_client.compress(
                 context="Test context",
-                compression_model_name="cmprsr_v1",
+                compression_model_name="A_CMPRSR_V1",
                 target_compression_ratio=-0.5,
             )
 
@@ -72,13 +72,13 @@ class TestBatchErrors:
     def test_batch_empty_contexts(self, admin_client):
         """Test that empty contexts list raises error."""
         with pytest.raises(ValidationError):
-            admin_client.compress_batch(contexts=[], compression_model_name="cmprsr_v1")
+            admin_client.compress_batch(contexts=[], compression_model_name="A_CMPRSR_V1")
 
     def test_batch_with_empty_string(self, admin_client):
         """Test batch with empty string in contexts."""
         with pytest.raises(ValidationError):
             admin_client.compress_batch(
-                contexts=["Valid context", ""], compression_model_name="cmprsr_v1"
+                contexts=["Valid context", ""], compression_model_name="A_CMPRSR_V1"
             )
 
 
@@ -90,35 +90,26 @@ class TestAsyncErrors:
         """Test async compression with invalid key."""
         with pytest.raises(AuthenticationError):
             await client_with_invalid_key.compress_async(
-                context="Test context", compression_model_name="cmprsr_v1"
+                context="Test context", compression_model_name="A_CMPRSR_V1"
             )
 
     @pytest.mark.asyncio
     async def test_async_validation_error(self, admin_client):
         """Test async compression with validation error."""
         with pytest.raises(ValidationError):
-            await admin_client.compress_async(context="", compression_model_name="cmprsr_v1")
+            await admin_client.compress_async(context="", compression_model_name="A_CMPRSR_V1")
 
 
 class TestConnectionErrors:
     """Test connection and network error handling."""
-
-    def test_invalid_base_url(self):
-        """Test connection to invalid base URL."""
-        client = CompressionClient(
-            api_key="cmp_test", base_url="http://invalid-url-that-does-not-exist.local"
-        )
-        with pytest.raises(CompresrError):
-            client.compress(context="Test", compression_model_name="cmprsr_v1")
 
     def test_timeout_handling(self, admin_client):
         """Test that timeout is respected."""
         # Create client with very short timeout
         client = CompressionClient(
             api_key=admin_client._api_key,
-            base_url=admin_client._base_url,
             timeout=0.001,  # 1ms - should timeout
         )
 
         with pytest.raises(CompresrError):
-            client.compress(context="Long context " * 100, compression_model_name="cmprsr_v1")
+            client.compress(context="Long context " * 100, compression_model_name="A_CMPRSR_V1")

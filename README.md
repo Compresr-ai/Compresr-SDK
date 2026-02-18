@@ -29,7 +29,7 @@ client = CompressionClient(api_key="cmp_your_api_key")
 
 result = client.compress(
     context="Your long context text...",
-    compression_model_name="cmprsr_v1"
+    compression_model_name="A_CMPRSR_V1"
 )
 
 print(f"Saved {result.data.tokens_saved} tokens!")
@@ -43,7 +43,7 @@ curl -X POST https://api.compresr.ai/api/compress/generate \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
     "context": "Your long context text...",
-    "compression_model_name": "cmprsr_v1"
+    "compression_model_name": "A_CMPRSR_V1"
   }'
 ```
 

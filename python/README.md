@@ -18,36 +18,49 @@ Get your API key from [compresr.ai](https://compresr.ai):
 2. Navigate to Dashboard → API Keys
 3. Click "Create New Key" and copy it (shown only once!)
 
-```python
-from compresr import CompressionClient
+### Two Types of Compression
 
-# Initialize with your API key
-client = CompressionClient(api_key="cmp_your_api_key_here")
-```
+#### 1. Agnostic Compression (No Question Needed)
 
-### Basic Compression
+Use `CompressionClient` for general-purpose compression:
 
 ```python
 from compresr import CompressionClient
 
 client = CompressionClient(api_key="cmp_your_api_key")
 
-# Compress context
 result = client.compress(
     context="Your very long context that needs compression...",
-    compression_model_name="cmprsr_v1"
+    compression_model_name="A_CMPRSR_V1"  # or "A_CMPRSR_V1_FLASH" for speed
 )
 
 print(f"Original: {result.data.original_tokens} tokens")
 print(f"Compressed: {result.data.compressed_tokens} tokens")
-print(f"Compression ratio: {result.data.actual_compression_ratio:.2%}")
-print(f"Tokens saved: {result.data.tokens_saved}")
+print(f"Saved: {result.data.tokens_saved} tokens")
+```
 
-# Use compressed context with your own LLM
-compressed_context = result.data.compressed_context
+#### 2. Question-Specific Compression
+
+Use `QSCompressionClient` to compress based on a specific question:
+
+```python
+from compresr import QSCompressionClient
+
+client = QSCompressionClient(api_key="cmp_your_api_key")
+
+result = client.compress(
+    context="Python was created in 1991. JavaScript in 1995. Java in 1995.",
+    question="Who created Python?",
+    compression_model_name="QS_CMPRSR_V1"
+)
+
+print(f"Compressed (question-relevant): {result.data.compressed_context}")
+print(f"Saved: {result.data.tokens_saved} tokens")
 ```
 
 ### Integration with OpenAI
+
+**Agnostic compression:**
 
 ```python
 from compresr import CompressionClient
@@ -56,13 +69,11 @@ from openai import OpenAI
 compresr = CompressionClient(api_key="cmp_xxx")
 openai_client = OpenAI(api_key="sk-xxx")
 
-# Compress your long context
 compressed = compresr.compress(
     context="Your long system prompt or document...",
-    compression_model_name="cmprsr_v1"
+    compression_model_name="A_CMPRSR_V1"
 )
 
-# Use with OpenAI - saves tokens and money!
 response = openai_client.chat.completions.create(
     model="gpt-4o",
     messages=[
@@ -74,63 +85,111 @@ response = openai_client.chat.completions.create(
 print(f"Saved {compressed.data.tokens_saved} tokens!")
 ```
 
-## Streaming Support
-
-Real-time streaming compression:
+**Question-specific compression (RAG/QA):**
 
 ```python
-from compresr import CompressionClient
+from compresr import QSCompressionClient
+from openai import OpenAI
 
+compresr = QSCompressionClient(api_key="cmp_xxx")
+openai_client = OpenAI(api_key="sk-xxx")
+
+user_question = "What is machine learning?"
+
+# Compress retrieval results based on the question
+compressed = compresr.compress(
+    context="Retrieved documents with lots of information...",
+    question=user_question,
+    compression_model_name="QS_CMPRSR_V1"
+)
+
+response = openai_client.chat.completions.create(
+    model="gpt-4o",
+    messages=[
+        {"role": "system", "content": compressed.data.compressed_context},
+        {"role": "user", "content": user_question}
+    ]
+)
+```
+
+## Streaming Support
+
+Both clients support real-time streaming:
+
+```python
+from compresr import CompressionClient, QSCompressionClient
+
+# Agnostic streaming
 client = CompressionClient(api_key="cmp_your_api_key")
-
 for chunk in client.compress_stream(
     context="Your long context...",
-    compression_model_name="cmprsr_v1"
+    compression_model_name="A_CMPRSR_V1"
+):
+    print(chunk.content, end="", flush=True)
+
+# Question-specific streaming
+qs_client = QSCompressionClient(api_key="cmp_your_api_key")
+for chunk in qs_client.compress_stream(
+    context="Your long context...",
+    question="What is important here?",
+    compression_model_name="QS_CMPRSR_V1"
 ):
     print(chunk.content, end="", flush=True)
 ```
 
 ## Async Support
 
-All methods have async variants:
+Both clients support async/await:
 
 ```python
 import asyncio
-from compresr import CompressionClient
+from compresr import CompressionClient, QSCompressionClient
 
 async def main():
+    # Agnostic async
     client = CompressionClient(api_key="cmp_your_api_key")
-
     result = await client.compress_async(
         context="Your context...",
-        compression_model_name="cmprsr_v1"
+        compression_model_name="A_CMPRSR_V1"
     )
-
-    print(result.data.compressed_context)
+    
+    # Question-specific async
+    qs_client = QSCompressionClient(api_key="cmp_your_api_key")
+    qs_result = await qs_client.compress_async(
+        context="Your context...",
+        question="What matters here?",
+        compression_model_name="QS_CMPRSR_V1"
+    )
+    
     await client.close()
+    await qs_client.close()
 
 asyncio.run(main())
 ```
 
 ## Batch Processing
 
-Process multiple contexts efficiently:
+Both clients support batch processing:
 
 ```python
-from compresr import CompressionClient
+from compresr import CompressionClient, QSCompressionClient
 
+# Agnostic batch
 client = CompressionClient(api_key="cmp_your_api_key")
 results = client.compress_batch(
-    contexts=[
-        "First context to compress...",
-        "Second context to compress..."
-    ],
-    compression_model_name="cmprsr_v1"
+    contexts=["First context...", "Second context..."],
+    compression_model_name="A_CMPRSR_V1"
+)
+
+# Question-specific batch
+qs_client = QSCompressionClient(api_key="cmp_your_api_key")
+qs_results = qs_client.compress_batch(
+    contexts=["Context 1...", "Context 2..."],
+    questions=["Question 1?", "Question 2?"],
+    compression_model_name="QS_CMPRSR_V1"
 )
 
 print(f"Total tokens saved: {results.data.total_tokens_saved}")
-for result in results.data.results:
-    print(f"  - Original: {result.original_tokens} → Compressed: {result.compressed_tokens}")
 ```
 
 ## API Reference
@@ -138,22 +197,32 @@ for result in results.data.results:
 ### Client Initialization
 
 ```python
-from compresr import CompressionClient
+from compresr import CompressionClient, QSCompressionClient
 
+# Agnostic compression
 client = CompressionClient(
-    api_key="cmp_your_api_key",           # Required
-    base_url="https://api.compresr.ai",   # Optional (default)
-    timeout=30,                            # Optional: seconds
+    api_key="cmp_your_api_key",  # Required
+    timeout=30                    # Optional: request timeout in seconds
+)
+
+# Question-specific compression
+qs_client = QSCompressionClient(
+    api_key="cmp_your_api_key",  # Required
+    timeout=30                    # Optional: request timeout in seconds
 )
 ```
 
+**Note:** BASE_URL is fixed to `https://api.compresr.ai` and cannot be changed.
+
 ### Methods
+
+Both `CompressionClient` and `QSCompressionClient` support:
 
 | Method | Description |
 |--------|-------------|
-| `compress()` | Compress single context |
+| `compress()` | Compress single context (QS requires `question` param) |
 | `compress_async()` | Async compress |
-| `compress_batch()` | Batch compress multiple contexts |
+| `compress_batch()` | Batch compress (QS requires `questions` list) |
 | `compress_stream()` | Stream compression |
 
 ### Response Structure
@@ -177,32 +246,28 @@ results.data.count
 results.data.results              # List of CompressionResult
 ```
 
-## Key Features
-
-- **🗜️ Intelligent Compression**: Reduce context lengths while preserving meaning
-- **💰 Cost Optimization**: Save 30-70% on LLM API costs
-- **⚡ Streaming Support**: Real-time response streaming
-- **🔄 Async Ready**: Full async/await support
-- **📦 Batch Processing**: Handle multiple contexts efficiently
-- **📊 Usage Tracking**: Monitor compression metrics
-
 ## Available Models
 
-| Model | Type | Description |
-|-------|------|-------------|
-| `cmprsr_v1` | Agnostic | Production compressor (default) - uses Qwen3-4B |
-| `question_specific_cmprsr` | Question-Specific | Preserves question-relevant info (UCC format) |
-| `question_specific_reranker` | Question-Specific | Selects chunks based on question using reranker |
-| `history_cmprsr` | Agentic | Compresses conversation history into summaries |
-| `tool_output_cmprsr` | Agentic | Compresses tool outputs with specialized prompts |
-| `tool_output_openai` | Agentic | Compresses tool outputs using OpenAI GPT-5-mini |
-| `tool_output_reranker` | Agentic | Selects tool output chunks using reranker |
-| `tool_discovery_cmprsr` | Agentic | LLM-based tool discovery for selecting relevant tools |
+### Agnostic Models (CompressionClient)
+
+| Model | Description | Use Case |
+|-------|-------------|----------|
+| `A_CMPRSR_V1` | LLM-based abstractive compression (default) | General purpose, best quality |
+| `A_CMPRSR_V1_FLASH` | Fast extractive compression | Speed-critical applications |
+
+### Question-Specific Models (QSCompressionClient)
+
+| Model | Description | Use Case |
+|-------|-------------|----------|
+| `QS_CMPRSR_V1` | Question-specific compression, Abstractive (default) | General purpose |
+| `QSR_CMPRSR_V1` | Question-specific Extractive | General purpose |
 
 ## Error Handling
 
+Both clients use the same exception handling:
+
 ```python
-from compresr import CompressionClient
+from compresr import CompressionClient, QSCompressionClient
 from compresr.exceptions import (
     CompresrError,
     AuthenticationError,
@@ -215,7 +280,7 @@ client = CompressionClient(api_key="cmp_your_api_key")
 try:
     result = client.compress(
         context="Your context...",
-        compression_model_name="cmprsr_v1"
+        compression_model_name="A_CMPRSR_V1"
     )
 except AuthenticationError:
     print("Invalid API key")
@@ -239,7 +304,7 @@ Proprietary License
 
 ## Support
 
-- 📖 Documentation: [docs.compresr.ai](https://docs.compresr.ai)
-- 💬 Support: [hello@compresr.ai](mailto:hello@compresr.ai)
-- 🐛 Issues: [GitHub Issues](https://github.com/compresr/sdk/issues)
-- 🌐 Website: [compresr.ai](https://compresr.ai)
+- Documentation: [compresr.ai/docs/overview](https://compresr.ai/docs/overview)
+- Support: [support@compresr.ai](mailto:support@compresr.ai)
+- Issues: [GitHub Issues](https://github.com/compresr/sdk/issues)
+- Website: [compresr.ai](https://compresr.ai)

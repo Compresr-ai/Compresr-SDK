@@ -30,7 +30,6 @@ class HTTPClient:
     def __init__(
         self,
         api_key: str,
-        base_url: Optional[str] = None,
         timeout: Optional[int] = None,
     ):
         if not api_key:
@@ -41,7 +40,7 @@ class HTTPClient:
             )
 
         self._api_key = api_key
-        self._base_url = (base_url or API_CONFIG.DEFAULT_BASE_URL).rstrip("/")
+        self._base_url = API_CONFIG.BASE_URL
         self._timeout = timeout or API_CONFIG.DEFAULT_TIMEOUT
         self._async_client: Optional["httpx.AsyncClient"] = None
 

@@ -22,16 +22,16 @@ class TestCompressRequest:
 
     def test_valid_request(self):
         """Test valid compress request."""
-        req = CompressRequest(context="Test context", compression_model_name="cmprsr_v1")
+        req = CompressRequest(context="Test context", compression_model_name="A_CMPRSR_V1")
         assert req.context == "Test context"
-        assert req.compression_model_name == "cmprsr_v1"
+        assert req.compression_model_name == "A_CMPRSR_V1"
         assert req.target_compression_ratio is None
 
     def test_request_with_ratio(self):
         """Test request with compression ratio."""
         req = CompressRequest(
             context="Test context",
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
             target_compression_ratio=0.5,
         )
         assert req.target_compression_ratio == 0.5
@@ -39,14 +39,14 @@ class TestCompressRequest:
     def test_empty_context_fails(self):
         """Test that empty context fails validation."""
         with pytest.raises(ValidationError):
-            CompressRequest(context="", compression_model_name="cmprsr_v1")
+            CompressRequest(context="", compression_model_name="A_CMPRSR_V1")
 
     def test_invalid_ratio_high_fails(self):
         """Test that ratio > 1.0 fails validation."""
         with pytest.raises(ValidationError):
             CompressRequest(
                 context="Test",
-                compression_model_name="cmprsr_v1",
+                compression_model_name="A_CMPRSR_V1",
                 target_compression_ratio=1.5,
             )
 
@@ -55,7 +55,7 @@ class TestCompressRequest:
         with pytest.raises(ValidationError):
             CompressRequest(
                 context="Test",
-                compression_model_name="cmprsr_v1",
+                compression_model_name="A_CMPRSR_V1",
                 target_compression_ratio=-0.1,
             )
 
@@ -71,21 +71,21 @@ class TestBatchCompressRequest:
     def test_valid_batch_request(self):
         """Test valid batch request."""
         req = BatchCompressRequest(
-            contexts=["Context 1", "Context 2"], compression_model_name="cmprsr_v1"
+            contexts=["Context 1", "Context 2"], compression_model_name="A_CMPRSR_V1"
         )
         assert len(req.contexts) == 2
-        assert req.compression_model_name == "cmprsr_v1"
+        assert req.compression_model_name == "A_CMPRSR_V1"
 
     def test_empty_contexts_fails(self):
         """Test that empty contexts list fails."""
         with pytest.raises(ValidationError):
-            BatchCompressRequest(contexts=[], compression_model_name="cmprsr_v1")
+            BatchCompressRequest(contexts=[], compression_model_name="A_CMPRSR_V1")
 
     def test_contexts_with_empty_string_fails(self):
         """Test that contexts with empty strings are handled."""
         # Note: Empty strings in list are validated at API level, not schema level
         req = BatchCompressRequest(
-            contexts=["Valid", "Another valid"], compression_model_name="cmprsr_v1"
+            contexts=["Valid", "Another valid"], compression_model_name="A_CMPRSR_V1"
         )
         assert len(req.contexts) == 2
 

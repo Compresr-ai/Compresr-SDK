@@ -36,7 +36,7 @@ class TestSingleCompressionPerformance:
         start = time.perf_counter()
         response = admin_client.compress(
             context=context,
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
             target_compression_ratio=ratio,
         )
         end = time.perf_counter()
@@ -59,7 +59,7 @@ class TestSingleCompressionPerformance:
         context = test_contexts[context_idx]
 
         start = time.perf_counter()
-        response = admin_client.compress(context=context, compression_model_name="cmprsr_v1")
+        response = admin_client.compress(context=context, compression_model_name="A_CMPRSR_V1")
         end = time.perf_counter()
 
         latency_ms = (end - start) * 1000
@@ -78,7 +78,7 @@ class TestSingleCompressionPerformance:
 
         for i in range(5):
             start = time.perf_counter()
-            response = admin_client.compress(context=context, compression_model_name="cmprsr_v1")
+            response = admin_client.compress(context=context, compression_model_name="A_CMPRSR_V1")
             end = time.perf_counter()
 
             latency_ms = (end - start) * 1000
@@ -108,7 +108,7 @@ class TestBatchCompressionPerformance:
 
         start = time.perf_counter()
         response = admin_client.compress_batch(
-            contexts=contexts, compression_model_name="cmprsr_v1"
+            contexts=contexts, compression_model_name="A_CMPRSR_V1"
         )
         end = time.perf_counter()
 
@@ -129,13 +129,13 @@ class TestBatchCompressionPerformance:
         # Sequential compression
         seq_start = time.perf_counter()
         for ctx in contexts:
-            admin_client.compress(context=ctx, compression_model_name="cmprsr_v1")
+            admin_client.compress(context=ctx, compression_model_name="A_CMPRSR_V1")
         seq_end = time.perf_counter()
         seq_latency = (seq_end - seq_start) * 1000
 
         # Batch compression
         batch_start = time.perf_counter()
-        admin_client.compress_batch(contexts=contexts, compression_model_name="cmprsr_v1")
+        admin_client.compress_batch(contexts=contexts, compression_model_name="A_CMPRSR_V1")
         batch_end = time.perf_counter()
         batch_latency = (batch_end - batch_start) * 1000
 
@@ -164,7 +164,7 @@ class TestStreamingPerformance:
         chunk_count = 0
 
         for chunk in admin_client.compress_stream(
-            context=context, compression_model_name="cmprsr_v1"
+            context=context, compression_model_name="A_CMPRSR_V1"
         ):
             if first_chunk_time is None and chunk.content:
                 first_chunk_time = time.perf_counter()
@@ -188,7 +188,7 @@ class TestStreamingPerformance:
         chunk_times = []
 
         for chunk in admin_client.compress_stream(
-            context=context, compression_model_name="cmprsr_v1"
+            context=context, compression_model_name="A_CMPRSR_V1"
         ):
             if chunk.content:
                 chunk_times.append(time.perf_counter())
@@ -213,7 +213,7 @@ class TestTokenEfficiency:
         for ratio in [0.3, 0.5, 0.7]:
             response = admin_client.compress(
                 context=context,
-                compression_model_name="cmprsr_v1",
+                compression_model_name="A_CMPRSR_V1",
                 target_compression_ratio=ratio,
             )
 
@@ -244,7 +244,7 @@ class TestTokenEfficiency:
 
         for context in test_contexts:
             start = time.perf_counter()
-            response = admin_client.compress(context=context, compression_model_name="cmprsr_v1")
+            response = admin_client.compress(context=context, compression_model_name="A_CMPRSR_V1")
             end = time.perf_counter()
 
             latency_ms = (end - start) * 1000

@@ -16,7 +16,7 @@ class TestModelValidation:
         """Test compression with default model."""
         response = admin_client.compress(
             context="Test compression with default model settings.",
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
         )
         assert response.success is True
         assert response.data.compressed_context is not None
@@ -25,7 +25,7 @@ class TestModelValidation:
         """Test compression with explicit model name."""
         response = admin_client.compress(
             context="Testing explicit model name parameter in compression.",
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
         )
         assert response.success is True
         assert response.data.original_tokens > 0
@@ -49,7 +49,7 @@ class TestCompressionRatios:
 
         response = admin_client.compress(
             context=context,
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
             target_compression_ratio=ratio,
         )
 
@@ -62,7 +62,7 @@ class TestCompressionRatios:
         """Test high compression ratio (70% reduction)."""
         response = admin_client.compress(
             context="This is a longer context that should be compressed aggressively " * 5,
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
             target_compression_ratio=0.7,
         )
 
@@ -73,7 +73,7 @@ class TestCompressionRatios:
         """Test low compression ratio (30% reduction)."""
         response = admin_client.compress(
             context="This context will be compressed conservatively to retain more information.",
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
             target_compression_ratio=0.3,
         )
 
@@ -86,20 +86,20 @@ class TestContextSizes:
 
     def test_short_context(self, admin_client):
         """Test compression with short context."""
-        response = admin_client.compress(context="Short text.", compression_model_name="cmprsr_v1")
+        response = admin_client.compress(context="Short text.", compression_model_name="A_CMPRSR_V1")
         assert response.success is True
 
     def test_medium_context(self, admin_client):
         """Test compression with medium context."""
         context = "This is a medium-sized context. " * 20
-        response = admin_client.compress(context=context, compression_model_name="cmprsr_v1")
+        response = admin_client.compress(context=context, compression_model_name="A_CMPRSR_V1")
         assert response.success is True
         assert response.data.original_tokens > 50
 
     def test_long_context(self, admin_client):
         """Test compression with long context."""
         context = "This is a long context for testing compression efficiency. " * 100
-        response = admin_client.compress(context=context, compression_model_name="cmprsr_v1")
+        response = admin_client.compress(context=context, compression_model_name="A_CMPRSR_V1")
         assert response.success is True
         assert response.data.original_tokens > 500
         assert response.data.tokens_saved > 0
@@ -117,7 +117,7 @@ class TestBatchOperations:
         ]
 
         response = admin_client.compress_batch(
-            contexts=contexts, compression_model_name="cmprsr_v1"
+            contexts=contexts, compression_model_name="A_CMPRSR_V1"
         )
 
         assert response.success is True
@@ -129,7 +129,7 @@ class TestBatchOperations:
         contexts = [f"Context number {i} for testing batch compression." for i in range(20)]
 
         response = admin_client.compress_batch(
-            contexts=contexts, compression_model_name="cmprsr_v1"
+            contexts=contexts, compression_model_name="A_CMPRSR_V1"
         )
 
         assert response.success is True
@@ -146,7 +146,7 @@ class TestBatchOperations:
 
         response = admin_client.compress_batch(
             contexts=contexts,
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
             target_compression_ratio=0.5,
         )
 
@@ -162,7 +162,7 @@ class TestStreamingCompression:
         chunks = list(
             admin_client.compress_stream(
                 context="Stream this context and verify chunks are received progressively.",
-                compression_model_name="cmprsr_v1",
+                compression_model_name="A_CMPRSR_V1",
             )
         )
 
@@ -175,7 +175,7 @@ class TestStreamingCompression:
 
         for chunk in admin_client.compress_stream(
             context="Test streaming completion with done flag verification.",
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
         ):
             if chunk.done:
                 done_received = True
@@ -188,7 +188,7 @@ class TestStreamingCompression:
 
         for chunk in admin_client.compress_stream(
             context="Accumulate all streamed chunks to reconstruct the full compressed context.",
-            compression_model_name="cmprsr_v1",
+            compression_model_name="A_CMPRSR_V1",
         ):
             if chunk.content:
                 full_content += chunk.content
