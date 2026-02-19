@@ -6,7 +6,7 @@ Do not use directly - use CompressionClient or QSCompressionClient.
 """
 
 from abc import ABC, abstractmethod
-from typing import Generator, List, Optional
+from typing import Any, Generator, List, Optional
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -15,6 +15,7 @@ from ..exceptions import ValidationError
 from ..schemas import (
     BatchCompressRequest,
     BatchCompressResponse,
+    BatchInput,
     CompressRequest,
     CompressResponse,
     StreamChunk,
@@ -50,17 +51,15 @@ class BaseCompressionClient(HTTPClient, ABC):
 
     def _build_batch_request(
         self,
-        contexts: List[str],
+        inputs: List[BatchInput],
         compression_model_name: str,
-        question: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
     ) -> BatchCompressRequest:
         """Build and validate a batch compression request."""
         try:
             return BatchCompressRequest(
-                contexts=contexts,
+                inputs=inputs,
                 compression_model_name=compression_model_name,
-                question=question,
                 target_compression_ratio=target_compression_ratio,
             )
         except PydanticValidationError as e:
@@ -94,26 +93,28 @@ class BaseCompressionClient(HTTPClient, ABC):
 
     # Abstract methods - subclasses must implement
     @abstractmethod
-    def compress(self, context: str, **kwargs) -> CompressResponse:
+    def compress(self, context: str, **kwargs: Any) -> CompressResponse:
         """Compress a context."""
         pass
 
     @abstractmethod
-    def compress_batch(self, contexts: List[str], **kwargs) -> BatchCompressResponse:
+    def compress_batch(self, contexts: List[str], **kwargs: Any) -> BatchCompressResponse:
         """Batch compress multiple contexts."""
         pass
 
     @abstractmethod
-    def compress_stream(self, context: str, **kwargs) -> Generator[StreamChunk, None, None]:
+    def compress_stream(self, context: str, **kwargs: Any) -> Generator[StreamChunk, None, None]:
         """Stream compression."""
         pass
 
     @abstractmethod
-    async def compress_async(self, context: str, **kwargs) -> CompressResponse:
+    async def compress_async(self, context: str, **kwargs: Any) -> CompressResponse:
         """Compress a context (async)."""
         pass
 
     @abstractmethod
-    async def compress_batch_async(self, contexts: List[str], **kwargs) -> BatchCompressResponse:
+    async def compress_batch_async(
+        self, contexts: List[str], **kwargs: Any
+    ) -> BatchCompressResponse:
         """Batch compress multiple contexts (async)."""
         pass

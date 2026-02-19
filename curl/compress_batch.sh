@@ -21,10 +21,10 @@ curl -s -X POST "$BASE_URL/api/compress/batch" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $API_KEY" \
   -d '{
-    "contexts": [
-      "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is commonly used for testing.",
-      "Machine learning is a subset of artificial intelligence that enables systems to automatically learn and improve from experience.",
-      "Context compression helps reduce API costs by intelligently removing redundant information while preserving semantic meaning."
+    "inputs": [
+      {"context": "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is commonly used for testing."},
+      {"context": "Machine learning is a subset of artificial intelligence that enables systems to automatically learn and improve from experience."},
+      {"context": "Context compression helps reduce API costs by intelligently removing redundant information while preserving semantic meaning."}
     ],
     "compression_model_name": "A_CMPRSR_V1",
     "target_compression_ratio": 0.5

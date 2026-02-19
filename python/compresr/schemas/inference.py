@@ -6,7 +6,7 @@ Schemas for compression endpoints.
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 from .base import BaseResponse
 
@@ -41,31 +41,43 @@ class CompressRequest(BaseModel):
 
     context: str = Field(..., min_length=1, description="Context text to compress")
     compression_model_name: str = Field(..., description="Compression model (e.g., 'A_CMPRSR_V1')")
-    question: Optional[str] = Field(None, min_length=1, description="Question for question-specific models")
+    question: Optional[str] = Field(
+        None, min_length=1, description="Question for question-specific models"
+    )
     target_compression_ratio: Optional[float] = Field(
         None, ge=CompressionConfig.MIN_RATIO, le=CompressionConfig.MAX_RATIO
     )
     source: str = Field(default="sdk:python", description="Source of request for analytics")
+
+
+class BatchInput(BaseModel):
+    """A single input in a batch compression request."""
+
+    context: str = Field(..., min_length=1, description="Context text to compress")
+    question: Optional[str] = Field(None, min_length=1, description="Question for QS models")
 
 
 class BatchCompressRequest(BaseModel):
-    """Request to compress multiple contexts."""
+    """Request to compress multiple contexts.
 
-    contexts: List[str] = Field(..., min_length=1, max_length=100)
+    Example:
+        BatchCompressRequest(
+            inputs=[
+                BatchInput(context="Machine learning is...", question="What is ML?"),
+                BatchInput(context="Python is a language...", question="Who created Python?"),
+            ],
+            compression_model_name="QS_CMPRSR_V1"
+        )
+    """
+
+    inputs: List[BatchInput] = Field(
+        ..., min_length=1, max_length=100, description="List of inputs to compress"
+    )
     compression_model_name: str = Field(..., description="Compression model (e.g., 'A_CMPRSR_V1')")
-    question: Optional[str] = Field(None, min_length=1, description="Question for question-specific models")
     target_compression_ratio: Optional[float] = Field(
         None, ge=CompressionConfig.MIN_RATIO, le=CompressionConfig.MAX_RATIO
     )
     source: str = Field(default="sdk:python", description="Source of request for analytics")
-
-    @field_validator("contexts")
-    @classmethod
-    def validate_contexts(cls, v: list[str]) -> list[str]:
-        """Ensure no empty strings in contexts list."""
-        if any(not ctx.strip() for ctx in v):
-            raise ValueError("All contexts must be non-empty strings")
-        return v
 
 
 # =============================================================================

@@ -57,7 +57,7 @@ class Models:
     Agnostic models (public API):
     - A_CMPRSR_V1: LLM-based abstractive compression using Qwen3-4B (default)
     - A_CMPRSR_V1_FLASH: Fast extractive compression using LLMLingua-2
-    
+
     Question-specific models (demo/JWT auth):
     - QS_CMPRSR_V1: Question-specific compression
     - QSR_CMPRSR_V1: Question-specific with reranking

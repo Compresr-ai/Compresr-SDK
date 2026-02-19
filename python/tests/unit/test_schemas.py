@@ -69,25 +69,33 @@ class TestBatchCompressRequest:
     """Test BatchCompressRequest schema validation."""
 
     def test_valid_batch_request(self):
-        """Test valid batch request."""
+        """Test valid batch request with inputs format."""
+        from compresr.schemas import BatchInput
+
         req = BatchCompressRequest(
-            contexts=["Context 1", "Context 2"], compression_model_name="A_CMPRSR_V1"
+            inputs=[BatchInput(context="Context 1"), BatchInput(context="Context 2")],
+            compression_model_name="A_CMPRSR_V1",
         )
-        assert len(req.contexts) == 2
+        assert len(req.inputs) == 2
         assert req.compression_model_name == "A_CMPRSR_V1"
 
-    def test_empty_contexts_fails(self):
-        """Test that empty contexts list fails."""
+    def test_empty_inputs_fails(self):
+        """Test that empty inputs list fails."""
         with pytest.raises(ValidationError):
-            BatchCompressRequest(contexts=[], compression_model_name="A_CMPRSR_V1")
+            BatchCompressRequest(inputs=[], compression_model_name="A_CMPRSR_V1")
 
-    def test_contexts_with_empty_string_fails(self):
-        """Test that contexts with empty strings are handled."""
-        # Note: Empty strings in list are validated at API level, not schema level
+    def test_valid_inputs_with_question(self):
+        """Test valid inputs with question for QS models."""
+        from compresr.schemas import BatchInput
+
         req = BatchCompressRequest(
-            contexts=["Valid", "Another valid"], compression_model_name="A_CMPRSR_V1"
+            inputs=[
+                BatchInput(context="Valid", question="What?"),
+                BatchInput(context="Another valid", question="How?"),
+            ],
+            compression_model_name="QS_CMPRSR_V1",
         )
-        assert len(req.contexts) == 2
+        assert len(req.inputs) == 2
 
 
 class TestCompressResult:

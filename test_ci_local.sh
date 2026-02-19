@@ -54,14 +54,29 @@ fi
 echo ""
 FAILED=0
 
-# Run Python SDK workflow
-echo "Running Python SDK CI..."
-if act -W .github/workflows/python-ci.yml $SECRET_FLAG; then
-    echo -e "${GREEN}✓ Python SDK CI passed${NC}"
+# Run Python SDK linting directly (avoids act post-step caching issues on M1/M2 Macs)
+echo "Running Python SDK Linting (direct)..."
+cd python
+if black . --check --diff && isort . --check-only --diff && mypy compresr && ruff check .; then
+    echo -e "${GREEN}✓ Python SDK linting passed${NC}"
 else
-    echo -e "${RED}✗ Python SDK CI failed${NC}"
+    echo -e "${RED}✗ Python SDK linting failed${NC}"
     ((FAILED++))
 fi
+cd ..
+
+echo ""
+
+# Run Python SDK unit tests
+echo "Running Python SDK unit tests..."
+cd python
+if pytest tests/unit -v; then
+    echo -e "${GREEN}✓ Python SDK unit tests passed${NC}"
+else
+    echo -e "${RED}✗ Python SDK unit tests failed${NC}"
+    ((FAILED++))
+fi
+cd ..
 
 echo ""
 

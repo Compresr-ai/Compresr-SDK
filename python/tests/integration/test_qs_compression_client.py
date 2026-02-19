@@ -1,7 +1,7 @@
 """
 Integration Tests for QSCompressionClient (Question-Specific Compression)
 
-Tests for the QSCompressionClient which handles question-specific 
+Tests for the QSCompressionClient which handles question-specific
 context compression - optimizing context based on a given question.
 
 Run with:
@@ -11,7 +11,6 @@ Run with:
 import pytest
 
 from compresr import QSCompressionClient
-from compresr.exceptions import RateLimitError
 from compresr.schemas import CompressResponse, StreamChunk
 
 DEFAULT_QS_MODEL = "QS_CMPRSR_V1"
@@ -76,8 +75,8 @@ class TestBasicQSCompression:
         """Test that QS compression returns all expected metrics."""
         response = admin_client.compress(
             context="Einstein's theory of relativity describes space, time, and gravity. "
-                    "Newton's laws of motion explain classical mechanics. "
-                    "Quantum mechanics governs subatomic particles.",
+            "Newton's laws of motion explain classical mechanics. "
+            "Quantum mechanics governs subatomic particles.",
             question="What did Einstein discover?",
             compression_model_name=DEFAULT_QS_MODEL,
         )
@@ -104,8 +103,7 @@ class TestBasicQSCompression:
             compression_model_name=DEFAULT_QS_MODEL,
         )
 
-        # Compressed context should contain Python-related info
-        compressed = response.data.compressed_context.lower()
+        # Verify response is successful and compression occurred
         assert response.success is True
         # The compression should preserve question-relevant content
         assert response.data.compressed_tokens < response.data.original_tokens
@@ -144,7 +142,7 @@ class TestAsyncQSCompression:
         """Test basic async QS compression."""
         response = await admin_client.compress_async(
             context="The capital of France is Paris. London is the capital of UK. "
-                    "Berlin is the capital of Germany. Rome is the capital of Italy.",
+            "Berlin is the capital of Germany. Rome is the capital of Italy.",
             question="What is the capital of France?",
             compression_model_name=DEFAULT_QS_MODEL,
         )
@@ -157,22 +155,29 @@ class TestBatchQSCompression:
     """Tests for batch QS compression."""
 
     def test_batch_qs_compression(self, admin_client):
-        """Test batch QS compression with multiple contexts and one question."""
-        contexts = [
-            "Machine learning uses data to train models. Deep learning uses neural networks.",
-            "The solar system has eight planets. Mars is called the Red Planet.",
-            "Shakespeare wrote Hamlet and Macbeth. He lived in Stratford-upon-Avon.",
+        """Test batch QS compression with inputs containing context and question."""
+        inputs = [
+            {
+                "context": "Machine learning uses data to train models. Deep learning uses neural networks.",
+                "question": "What is ML?",
+            },
+            {
+                "context": "The solar system has eight planets. Mars is called the Red Planet.",
+                "question": "How many planets?",
+            },
+            {
+                "context": "Shakespeare wrote Hamlet and Macbeth. He lived in Stratford-upon-Avon.",
+                "question": "What did Shakespeare write?",
+            },
         ]
-        question = "What is machine learning?"
 
         response = admin_client.compress_batch(
-            contexts=contexts,
-            question=question,
+            inputs=inputs,
             compression_model_name=DEFAULT_QS_MODEL,
         )
 
         assert response.success is True
-        assert len(response.data.results) == len(contexts)
+        assert len(response.data.results) == len(inputs)
 
 
 class TestStreamingQSCompression:
@@ -185,8 +190,8 @@ class TestStreamingQSCompression:
 
         for chunk in admin_client.compress_stream(
             context="Artificial intelligence is transforming many industries. "
-                    "Healthcare uses AI for diagnosis. Finance uses AI for fraud detection. "
-                    "Transportation uses AI for autonomous vehicles.",
+            "Healthcare uses AI for diagnosis. Finance uses AI for fraud detection. "
+            "Transportation uses AI for autonomous vehicles.",
             question="How is AI used in healthcare?",
             compression_model_name=DEFAULT_QS_MODEL,
         ):
@@ -204,15 +209,15 @@ class TestQSTokenCounting:
 
     def test_qs_compression_returns_token_counts(self, admin_client):
         """Test that QS compression returns valid token counts.
-        
+
         Note: QS models may not always reduce tokens - they focus on
         preserving question-relevant information, not minimizing size.
         """
         response = admin_client.compress(
             context="Quantum computing uses qubits instead of classical bits. "
-                    "It can solve certain problems exponentially faster. "
-                    "Cryptography may be affected by quantum computers. "
-                    "Error correction is a major challenge in quantum systems.",
+            "It can solve certain problems exponentially faster. "
+            "Cryptography may be affected by quantum computers. "
+            "Error correction is a major challenge in quantum systems.",
             question="What problems can quantum computing solve?",
             compression_model_name=DEFAULT_QS_MODEL,
             target_compression_ratio=0.5,

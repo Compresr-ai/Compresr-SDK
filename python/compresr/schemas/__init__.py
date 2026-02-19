@@ -26,10 +26,11 @@ from ..exceptions import (  # Response models; Exception classes
 
 # Import local schemas
 from .base import BaseResponse, MessageResponse
-from .inference import BatchCompressRequest  # Streaming; Compression
-from .inference import (
+from .inference import (  # Streaming; Compression
+    BatchCompressRequest,
     BatchCompressResponse,
     BatchCompressResult,
+    BatchInput,
     CompressRequest,
     CompressResponse,
     CompressResult,
@@ -65,6 +66,7 @@ __all__ = [
     "CompressRequest",
     "CompressResponse",
     "CompressResult",
+    "BatchInput",
     "BatchCompressRequest",
     "BatchCompressResponse",
     "BatchCompressResult",

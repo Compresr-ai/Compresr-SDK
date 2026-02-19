@@ -11,6 +11,7 @@ from typing import Generator, List, Optional
 
 from ..schemas import (
     BatchCompressResponse,
+    BatchInput,
     CompressResponse,
     StreamChunk,
 )
@@ -51,7 +52,7 @@ class CompressionClient(BaseCompressionClient):
 
     # ==================== Sync ====================
 
-    def compress(
+    def compress(  # type: ignore[override]
         self,
         context: str,
         compression_model_name: str = "A_CMPRSR_V1",
@@ -73,7 +74,7 @@ class CompressionClient(BaseCompressionClient):
         req = self._build_request(context, compression_model_name, None, target_compression_ratio)
         return self._do_compress(req)
 
-    def compress_batch(
+    def compress_batch(  # type: ignore[override]
         self,
         contexts: List[str],
         compression_model_name: str = "A_CMPRSR_V1",
@@ -90,10 +91,12 @@ class CompressionClient(BaseCompressionClient):
         Returns:
             BatchCompressResponse with all results and aggregated metrics
         """
-        req = self._build_batch_request(contexts, compression_model_name, None, target_compression_ratio)
+        # Convert contexts to BatchInput format (no question for agnostic)
+        inputs = [BatchInput(context=ctx, question=None) for ctx in contexts]
+        req = self._build_batch_request(inputs, compression_model_name, target_compression_ratio)
         return self._do_compress_batch(req)
 
-    def compress_stream(
+    def compress_stream(  # type: ignore[override]
         self,
         context: str,
         compression_model_name: str = "A_CMPRSR_V1",
@@ -115,7 +118,7 @@ class CompressionClient(BaseCompressionClient):
 
     # ==================== Async ====================
 
-    async def compress_async(
+    async def compress_async(  # type: ignore[override]
         self,
         context: str,
         compression_model_name: str = "A_CMPRSR_V1",
@@ -135,7 +138,7 @@ class CompressionClient(BaseCompressionClient):
         req = self._build_request(context, compression_model_name, None, target_compression_ratio)
         return await self._do_compress_async(req)
 
-    async def compress_batch_async(
+    async def compress_batch_async(  # type: ignore[override]
         self,
         contexts: List[str],
         compression_model_name: str = "A_CMPRSR_V1",
@@ -152,5 +155,6 @@ class CompressionClient(BaseCompressionClient):
         Returns:
             BatchCompressResponse with all results and aggregated metrics
         """
-        req = self._build_batch_request(contexts, compression_model_name, None, target_compression_ratio)
+        inputs = [BatchInput(context=ctx, question=None) for ctx in contexts]
+        req = self._build_batch_request(inputs, compression_model_name, target_compression_ratio)
         return await self._do_compress_batch_async(req)

@@ -19,6 +19,5 @@ echo ""
 curl -s -X POST "$BASE_URL/api/tokens/count" \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "The quick brown fox jumps over the lazy dog. This is a sample text for token counting.",
-    "model": "gpt-4"
+    "prompt": "The quick brown fox jumps over the lazy dog. This is a sample text for token counting."
   }' | jq .

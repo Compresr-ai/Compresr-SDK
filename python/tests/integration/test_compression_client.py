@@ -1,7 +1,7 @@
 """
 Integration Tests for CompressionClient (Agnostic Compression)
 
-Tests for the CompressionClient which handles context compression 
+Tests for the CompressionClient which handles context compression
 without requiring a question (agnostic compression).
 
 Run with:
@@ -11,7 +11,6 @@ Run with:
 import pytest
 
 from compresr import CompressionClient
-from compresr.exceptions import RateLimitError
 from compresr.schemas import CompressResponse, StreamChunk
 
 DEFAULT_COMPRESSION_MODEL = "A_CMPRSR_V1"

@@ -7,10 +7,11 @@ REQUIRES a question parameter for all compression methods.
 For general context compression (no question), use CompressionClient instead.
 """
 
-from typing import Generator, List, Optional
+from typing import Generator, List, Optional, Union
 
 from ..schemas import (
     BatchCompressResponse,
+    BatchInput,
     CompressResponse,
     StreamChunk,
 )
@@ -49,7 +50,7 @@ class QSCompressionClient(BaseCompressionClient):
 
     # ==================== Sync ====================
 
-    def compress(
+    def compress(  # type: ignore[override]
         self,
         context: str,
         question: str,
@@ -73,13 +74,14 @@ class QSCompressionClient(BaseCompressionClient):
         Returns:
             CompressResponse with compressed context and metrics
         """
-        req = self._build_request(context, compression_model_name, question, target_compression_ratio)
+        req = self._build_request(
+            context, compression_model_name, question, target_compression_ratio
+        )
         return self._do_compress(req)
 
-    def compress_batch(
+    def compress_batch(  # type: ignore[override]
         self,
-        contexts: List[str],
-        question: str,
+        inputs: List[Union[BatchInput, dict]],
         compression_model_name: str = "QS_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> BatchCompressResponse:
@@ -87,18 +89,28 @@ class QSCompressionClient(BaseCompressionClient):
         Question-specific batch compression (sync).
 
         Args:
-            contexts: List of contexts to compress (max 100)
-            question: Question to preserve relevance for (REQUIRED)
+            inputs: List of inputs to compress, each with context and question.
+                    Can be BatchInput objects or dicts: {"context": "...", "question": "..."}
             compression_model_name: Question-specific model to use
             target_compression_ratio: Target ratio (optional)
 
         Returns:
             BatchCompressResponse with all results and aggregated metrics
+
+        Example:
+            response = client.compress_batch([
+                {"context": "Machine learning is...", "question": "What is ML?"},
+                {"context": "Python was created...", "question": "Who made Python?"},
+            ])
         """
-        req = self._build_batch_request(contexts, compression_model_name, question, target_compression_ratio)
+        # Convert dicts to BatchInput if needed
+        batch_inputs = [BatchInput(**inp) if isinstance(inp, dict) else inp for inp in inputs]
+        req = self._build_batch_request(
+            batch_inputs, compression_model_name, target_compression_ratio
+        )
         return self._do_compress_batch(req)
 
-    def compress_stream(
+    def compress_stream(  # type: ignore[override]
         self,
         context: str,
         question: str,
@@ -117,12 +129,14 @@ class QSCompressionClient(BaseCompressionClient):
         Yields:
             StreamChunk objects with compressed content
         """
-        req = self._build_request(context, compression_model_name, question, target_compression_ratio)
+        req = self._build_request(
+            context, compression_model_name, question, target_compression_ratio
+        )
         yield from self._do_compress_stream(req)
 
     # ==================== Async ====================
 
-    async def compress_async(
+    async def compress_async(  # type: ignore[override]
         self,
         context: str,
         question: str,
@@ -141,13 +155,14 @@ class QSCompressionClient(BaseCompressionClient):
         Returns:
             CompressResponse with compressed context and metrics
         """
-        req = self._build_request(context, compression_model_name, question, target_compression_ratio)
+        req = self._build_request(
+            context, compression_model_name, question, target_compression_ratio
+        )
         return await self._do_compress_async(req)
 
-    async def compress_batch_async(
+    async def compress_batch_async(  # type: ignore[override]
         self,
-        contexts: List[str],
-        question: str,
+        inputs: List[Union[BatchInput, dict]],
         compression_model_name: str = "QS_CMPRSR_V1",
         target_compression_ratio: Optional[float] = None,
     ) -> BatchCompressResponse:
@@ -155,13 +170,16 @@ class QSCompressionClient(BaseCompressionClient):
         Question-specific batch compression (async).
 
         Args:
-            contexts: List of contexts to compress (max 100)
-            question: Question to preserve relevance for (REQUIRED)
+            inputs: List of inputs to compress, each with context and question.
+                    Can be BatchInput objects or dicts: {"context": "...", "question": "..."}
             compression_model_name: Question-specific model to use
             target_compression_ratio: Target ratio (optional)
 
         Returns:
             BatchCompressResponse with all results and aggregated metrics
         """
-        req = self._build_batch_request(contexts, compression_model_name, question, target_compression_ratio)
+        batch_inputs = [BatchInput(**inp) if isinstance(inp, dict) else inp for inp in inputs]
+        req = self._build_batch_request(
+            batch_inputs, compression_model_name, target_compression_ratio
+        )
         return await self._do_compress_batch_async(req)

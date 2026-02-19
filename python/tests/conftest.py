@@ -20,17 +20,14 @@ load_dotenv(env_file)
 def pytest_configure(config):
     """Configure pytest."""
     print(f"\n{'='*50}")
-    print(f"Testing against: https://api.compresr.ai")
+    print("Testing against: https://api.compresr.ai")
     print(f"{'='*50}\n")
 
 
 @pytest.fixture
 def admin_api_key():
     """Get admin API key."""
-    return (
-        os.getenv("COMPRESR_API_KEY")
-        or os.getenv("COMPRESSION_SERVICE_ADMIN_KEY")
-    )
+    return os.getenv("COMPRESR_API_KEY") or os.getenv("COMPRESSION_SERVICE_ADMIN_KEY")
 
 
 @pytest.fixture

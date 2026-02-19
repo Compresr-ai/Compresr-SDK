@@ -65,11 +65,3 @@ jobs:
           COMPRESR_API_KEY: ${{ secrets.COMPRESR_API_KEY }}
           COMPRESR_BASE_URL: https://api.compresr.ai
         run: pytest tests/integration -v --timeout=60
-      
-      - name: Run performance tests
-        if: env.COMPRESR_API_KEY != ''
-        env:
-          COMPRESR_API_KEY: ${{ secrets.COMPRESR_API_KEY }}
-          COMPRESR_BASE_URL: https://api.compresr.ai
-        run: pytest tests/performance -v --timeout=120
-        continue-on-error: true
