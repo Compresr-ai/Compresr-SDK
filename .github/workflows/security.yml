@@ -1,0 +1,24 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Check for API keys
+        run: |
+          if grep -rE 'cmp_[a-zA-Z0-9_-]{30,}' --include="*.py" --include="*.sh" . | \
+             grep -v '.env.example' | \
+             grep -v 'cmp_your_api_key' | \
+             grep -v 'cmp_xxx' | \
+             grep -v 'test_'; then
+            echo "ERROR: Potential API key detected!"
+            exit 1
+          fi
+          echo "No hardcoded secrets found"

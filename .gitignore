@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Compresr SDK - Local development only (not for public repo)
+.env
+.secrets
+python/deploy_python_sdk.sh
+
