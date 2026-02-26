@@ -27,7 +27,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/batch" \
         "query": "What is Rust?"
       }
     ],
-    "compression_model_name": "qs_gemfilter_v1",
+    "compression_model_name": "latte_v1",
     "target_compression_ratio": 0.5,
     "source": "sdk:curl"
   }')

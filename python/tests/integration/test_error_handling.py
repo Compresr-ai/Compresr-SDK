@@ -113,9 +113,7 @@ class TestAsyncErrors:
     async def test_async_validation_error(self, admin_client):
         """Test async compression with validation error (backend validation)."""
         with pytest.raises((ValidationError, ServerError, CompresrError)):
-            await admin_client.compress_async(
-                context="", compression_model_name="espresso_v1"
-            )
+            await admin_client.compress_async(context="", compression_model_name="espresso_v1")
 
 
 class TestConnectionErrors:
@@ -129,6 +127,4 @@ class TestConnectionErrors:
         )
 
         with pytest.raises(CompresrError):
-            client.compress(
-                context="Long context " * 100, compression_model_name="espresso_v1"
-            )
+            client.compress(context="Long context " * 100, compression_model_name="espresso_v1")

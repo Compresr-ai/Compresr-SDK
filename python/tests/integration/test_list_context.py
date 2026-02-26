@@ -118,8 +118,13 @@ class TestLatteListContext:
         assert response.success is True
         assert isinstance(response.data.compressed_context, str)
 
-    def test_list_context_returns_list(self, compression_client):
-        """Test that list context returns list compressed_context."""
+    def test_list_context_returns_string(self, compression_client):
+        """Test that list context returns string compressed_context for latte_v1.
+
+        Note: latte_v1 always returns a single string (concatenated) regardless
+        of whether the input is a list or string. This is different from espresso_v1
+        which preserves the input type.
+        """
         contexts = [
             "Machine learning uses algorithms to find patterns in data.",
             "Deep learning is inspired by biological neural networks.",
@@ -134,8 +139,8 @@ class TestLatteListContext:
         )
 
         assert response.success is True
-        assert isinstance(response.data.compressed_context, list)
-        assert len(response.data.compressed_context) == len(contexts)
+        # latte_v1 returns string even for list input
+        assert isinstance(response.data.compressed_context, str)
 
     def test_list_context_with_same_query(self, compression_client):
         """Test that all contexts are filtered using the same query."""
@@ -157,7 +162,10 @@ class TestLatteListContext:
 
     @pytest.mark.asyncio
     async def test_async_list_context(self, compression_client):
-        """Test async compression with list context."""
+        """Test async compression with list context.
+
+        Note: latte_v1 returns string even for list input.
+        """
         contexts = [
             "Einstein developed the theory of relativity.",
             "Newton formulated the laws of motion.",
@@ -171,8 +179,8 @@ class TestLatteListContext:
         )
 
         assert response.success is True
-        assert isinstance(response.data.compressed_context, list)
-        assert len(response.data.compressed_context) == len(contexts)
+        # latte_v1 returns string even for list input
+        assert isinstance(response.data.compressed_context, str)
 
 
 # =============================================================================

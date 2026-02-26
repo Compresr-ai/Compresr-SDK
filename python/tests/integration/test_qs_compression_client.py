@@ -129,17 +129,18 @@ class TestStreamingFilter:
     """Tests for streaming filtering."""
 
     def test_streaming_filter(self, admin_client):
-        """Test streaming filtering yields chunks."""
+        """Test streaming filtering yields chunks.
+
+        Note: Streaming only supports single string input, not batch/list.
+        """
         chunks = []
         content = ""
 
+        # Streaming requires single string input, not list
+        context = "Artificial intelligence is transforming many industries. Healthcare uses AI for diagnosis. Finance uses AI for fraud detection. Transportation uses AI for autonomous vehicles."
+
         for chunk in admin_client.filter_stream(
-            chunks=[
-                "Artificial intelligence is transforming many industries.",
-                "Healthcare uses AI for diagnosis.",
-                "Finance uses AI for fraud detection.",
-                "Transportation uses AI for autonomous vehicles.",
-            ],
+            chunks=context,
             query="How is AI used in healthcare?",
             compression_model_name=DEFAULT_FILTER_MODEL,
         ):

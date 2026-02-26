@@ -18,14 +18,14 @@ CONTEXT="Machine learning is a subset of AI. Deep learning uses neural networks.
 QUERY="What is machine learning?"
 
 # Test 1: SaT WITHOUT compression_ratio (should succeed)
-echo "1. Testing qs_sat_v1 WITHOUT compression_ratio..."
+echo "1. Testing latte_v1 WITHOUT compression_ratio..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"qs_sat_v1\",
+    \"compression_model_name\": \"latte_v1\",
     \"source\": \"sdk:curl\"
   }")
 
@@ -39,15 +39,38 @@ else
 fi
 echo ""
 
-# Test 2: SaT WITH compression_ratio (should fail with 422)
-echo "2. Testing qs_sat_v1 WITH compression_ratio (should fail)..."
+# Test 2: latte_v1 WITH compression_ratio (should succeed - latte supports compression_ratio)
+echo "2. Testing latte_v1 WITH compression_ratio (should succeed)..."
+RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $COMPRESR_API_KEY" \
+  -d "{
+    \"context\": \"$CONTEXT\",
+    \"query\": \"$QUERY\",
+    \"compression_model_name\": \"latte_v1\",
+    \"target_compression_ratio\": 0.5,
+    \"source\": \"sdk:curl\"
+  }")
+
+if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
+    echo "   ✓ latte_v1 with ratio succeeds (passed)"
+    ((++PASSED))
+else
+    echo "   ✗ latte_v1 with ratio should succeed (failed)"
+    echo "   Response: $RESPONSE"
+    ((++FAILED))
+fi
+echo ""
+
+# Test 3: coldbrew_v1 WITH compression_ratio (should fail with 422 - coldbrew doesn't support ratio)
+echo "3. Testing coldbrew_v1 WITH compression_ratio (should fail)..."
 RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"qs_sat_v1\",
+    \"compression_model_name\": \"coldbrew_v1\",
     \"target_compression_ratio\": 0.5,
     \"source\": \"sdk:curl\"
   }")
@@ -56,55 +79,54 @@ HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
 BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [ "$HTTP_CODE" = "422" ]; then
-    echo "   ✓ SaT with ratio returns 422 (passed)"
+    echo "   ✓ coldbrew with ratio returns 422 (passed)"
     ((++PASSED))
 else
-    echo "   ✗ SaT with ratio should return 422 (got $HTTP_CODE)"
+    echo "   ✗ coldbrew with ratio should return 422 (got $HTTP_CODE)"
     echo "   Response: $BODY"
     ((++FAILED))
 fi
 echo ""
 
-# Test 3: GemFilter WITH compression_ratio (should succeed)
-echo "3. Testing qs_gemfilter_v1 WITH compression_ratio (should succeed)..."
+# Test 4: coldbrew_v1 WITHOUT compression_ratio (should succeed)
+echo "4. Testing coldbrew_v1 WITHOUT compression_ratio (should succeed)..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"qs_gemfilter_v1\",
-    \"target_compression_ratio\": 0.5,
+    \"compression_model_name\": \"coldbrew_v1\",
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ GemFilter with ratio succeeds (passed)"
+    echo "   ✓ coldbrew without ratio succeeds (passed)"
     ((++PASSED))
 else
-    echo "   ✗ GemFilter with ratio should succeed (failed)"
+    echo "   ✗ coldbrew without ratio should succeed (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 4: GemFilter WITHOUT compression_ratio (should succeed)
-echo "4. Testing qs_gemfilter_v1 WITHOUT compression_ratio (should succeed)..."
-RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
+# Test 5: espresso_v1 (agnostic, no query)
+echo "5. Testing espresso_v1 (agnostic, no query)..."
+RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
-    \"query\": \"$QUERY\",
-    \"compression_model_name\": \"qs_gemfilter_v1\",
+    \"compression_model_name\": \"espresso_v1\",
+    \"target_compression_ratio\": 0.5,
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ GemFilter without ratio succeeds (passed)"
+    echo "   ✓ espresso_v1 succeeds (passed)"
     ((++PASSED))
 else
-    echo "   ✗ GemFilter without ratio should succeed (failed)"
+    echo "   ✗ espresso_v1 should succeed (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi

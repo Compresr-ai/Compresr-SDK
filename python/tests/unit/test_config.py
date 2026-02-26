@@ -10,11 +10,11 @@ from compresr.config import (
     AGNOSTIC_ENDPOINT_MODELS,
     ALLOWED_COMPRESSION_MODELS,
     ALLOWED_FILTER_MODELS,
+    QS_ENDPOINT_MODELS,
+    QUERY_REQUIRED_MODELS,
     APIConfig,
     Endpoints,
     Headers,
-    QS_ENDPOINT_MODELS,
-    QUERY_REQUIRED_MODELS,
     StatusCodes,
 )
 

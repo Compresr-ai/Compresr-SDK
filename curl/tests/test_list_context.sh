@@ -21,7 +21,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
     "context": "Machine learning is a powerful tool for data analysis.",
-    "compression_model_name": "agnostic_compressor_1",
+    "compression_model_name": "espresso_v1",
     "source": "sdk:curl"
   }')
 
@@ -42,7 +42,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
     "context": ["Machine learning enables data-driven decisions.", "Deep learning uses neural networks.", "NLP processes human language."],
-    "compression_model_name": "agnostic_compressor_1",
+    "compression_model_name": "espresso_v1",
     "source": "sdk:curl"
   }')
 
@@ -64,7 +64,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -d '{
     "context": "Python was created by Guido van Rossum. Java was created by James Gosling.",
     "query": "Who created Python?",
-    "compression_model_name": "qs_gemfilter_v1",
+    "compression_model_name": "coldbrew_v1",
     "source": "sdk:curl"
   }')
 
@@ -86,7 +86,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -d '{
     "context": ["Python was created by Guido van Rossum in 1991.", "JavaScript was created by Brendan Eich.", "Java was developed by James Gosling."],
     "query": "Who created Python?",
-    "compression_model_name": "qs_gemfilter_v1",
+    "compression_model_name": "coldbrew_v1",
     "source": "sdk:curl"
   }')
 

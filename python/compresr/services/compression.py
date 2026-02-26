@@ -51,9 +51,7 @@ class CompressionClient(BaseCompressionClient):
     def _validate_query_for_model(self, model_name: str, query: Optional[str]) -> None:
         """Validate query parameter against model requirements."""
         if model_name in QUERY_REQUIRED_MODELS and not query:
-            raise ValidationError(
-                f"Model '{model_name}' requires a 'query' parameter."
-            )
+            raise ValidationError(f"Model '{model_name}' requires a 'query' parameter.")
         if model_name not in QUERY_REQUIRED_MODELS and query is not None:
             raise ValidationError(
                 f"Model '{model_name}' does not accept a 'query' parameter. "
