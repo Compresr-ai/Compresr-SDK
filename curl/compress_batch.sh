@@ -26,6 +26,6 @@ curl -s -X POST "$BASE_URL/api/compress/question-agnostic/batch" \
       {"context": "Machine learning is a subset of artificial intelligence that enables systems to automatically learn and improve from experience."},
       {"context": "Context compression helps reduce API costs by intelligently removing redundant information while preserving semantic meaning."}
     ],
-    "compression_model_name": "espresso_v1",
+    "compression_model_name": "agnostic_compressor_1",
     "target_compression_ratio": 0.5
   }' | jq .

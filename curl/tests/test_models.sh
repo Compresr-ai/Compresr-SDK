@@ -11,7 +11,7 @@ echo "Testing models endpoint..."
 RESPONSE=$(bash ../models.sh 2>&1)
 
 # Check if response contains expected model name (agnostic endpoint only returns agnostic models)
-if echo "$RESPONSE" | grep -q "espresso_v1"; then
+if echo "$RESPONSE" | grep -q "agnostic_compressor_1"; then
     echo "✓ Models test passed"
     exit 0
 else

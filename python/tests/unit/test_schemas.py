@@ -20,7 +20,9 @@ class TestCompressRequest:
 
     def test_valid_request(self):
         """Test valid compress request."""
-        req = CompressRequest(context="Test context", compression_model_name="espresso_v1")
+        req = CompressRequest(
+            context="Test context", compression_model_name="espresso_v1"
+        )
         assert req.context == "Test context"
         assert req.compression_model_name == "espresso_v1"
         assert req.target_compression_ratio is None

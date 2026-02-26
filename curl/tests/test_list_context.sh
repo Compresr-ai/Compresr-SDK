@@ -21,7 +21,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
     "context": "Machine learning is a powerful tool for data analysis.",
-    "compression_model_name": "espresso_v1",
+    "compression_model_name": "agnostic_compressor_1",
     "source": "sdk:curl"
   }')
 
@@ -42,7 +42,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
     "context": ["Machine learning enables data-driven decisions.", "Deep learning uses neural networks.", "NLP processes human language."],
-    "compression_model_name": "espresso_v1",
+    "compression_model_name": "agnostic_compressor_1",
     "source": "sdk:curl"
   }')
 
@@ -64,7 +64,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -d '{
     "context": "Python was created by Guido van Rossum. Java was created by James Gosling.",
     "query": "Who created Python?",
-    "compression_model_name": "latte_v1",
+    "compression_model_name": "qs_gemfilter_v1",
     "source": "sdk:curl"
   }')
 
@@ -86,15 +86,15 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -d '{
     "context": ["Python was created by Guido van Rossum in 1991.", "JavaScript was created by Brendan Eich.", "Java was developed by James Gosling."],
     "query": "Who created Python?",
-    "compression_model_name": "latte_v1",
+    "compression_model_name": "qs_gemfilter_v1",
     "source": "sdk:curl"
   }')
 
-if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "string"' > /dev/null 2>&1; then
-    echo "   ✓ QS list context returns string (passed)"
+if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "array"' > /dev/null 2>&1; then
+    echo "   ✓ QS list context returns list (passed)"
     ((++PASSED))
 else
-    echo "   ✗ QS list context should return string (latte joins list into string) (failed)"
+    echo "   ✗ QS list context should return list (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi

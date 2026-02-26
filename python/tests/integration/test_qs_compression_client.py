@@ -133,9 +133,13 @@ class TestStreamingFilter:
         chunks = []
         content = ""
 
-        # Streaming requires single string input, not list
         for chunk in admin_client.filter_stream(
-            chunks="Artificial intelligence is transforming many industries. Healthcare uses AI for diagnosis. Finance uses AI for fraud detection. Transportation uses AI for autonomous vehicles.",
+            chunks=[
+                "Artificial intelligence is transforming many industries.",
+                "Healthcare uses AI for diagnosis.",
+                "Finance uses AI for fraud detection.",
+                "Transportation uses AI for autonomous vehicles.",
+            ],
             query="How is AI used in healthcare?",
             compression_model_name=DEFAULT_FILTER_MODEL,
         ):

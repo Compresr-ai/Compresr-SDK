@@ -48,11 +48,11 @@ class CompressRequest(BaseModel):
     context: Union[str, List[str]] = Field(
         ..., description="Context text to compress - single string or list of strings"
     )
-    compression_model_name: str = Field(..., description="Compression model (e.g., 'espresso_v1')")
+    compression_model_name: str = Field(
+        ..., description="Compression model (e.g., 'espresso_v1')"
+    )
     query: Optional[str] = Field(
-        None,
-        min_length=1,
-        description="Query for query-specific models (required for latte_v1, coldbrew_v1)",
+        None, min_length=1, description="Query for query-specific models (required for latte_v1, coldbrew_v1)"
     )
     target_compression_ratio: Optional[float] = Field(
         None,

@@ -22,7 +22,7 @@ curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "X-API-Key: $API_KEY" \
   -d '{
     "context": "Artificial intelligence and machine learning are transforming how we build software applications. These technologies enable computers to learn from data and make intelligent decisions without being explicitly programmed for every scenario.",
-    "compression_model_name": "espresso_v1",
+    "compression_model_name": "agnostic_compressor_1",
     "target_compression_ratio": 0.5,
     "source": "sdk:curl"
   }' | jq .

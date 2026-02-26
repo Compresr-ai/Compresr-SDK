@@ -23,7 +23,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/compress/question-
     "context": "'"$CONTEXT"'",
     "compression_model_name": "invalid_model_12345",
     "target_compression_ratio": 0.5,
-    "source": "sdk:curl"
+    "source": "sdk:curl:test"
   }')
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -53,7 +53,7 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/compress/question-
     "query": "test query",
     "compression_model_name": "nonexistent_model",
     "target_compression_ratio": 0.5,
-    "source": "sdk:curl"
+    "source": "sdk:curl:test"
   }')
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
@@ -80,9 +80,9 @@ RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$BASE_URL/api/compress/question-
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
     "context": "'"$CONTEXT"'",
-    "compression_model_name": "latte_v1",
+    "compression_model_name": "qs_gemfilter_v1",
     "target_compression_ratio": 0.5,
-    "source": "sdk:curl"
+    "source": "sdk:curl:test"
   }')
 
 HTTP_CODE=$(echo "$RESPONSE" | tail -n1)

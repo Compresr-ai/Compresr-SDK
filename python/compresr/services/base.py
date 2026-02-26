@@ -5,7 +5,7 @@ Contains shared logic for HTTP calls and response handling.
 Do not use directly - use CompressionClient or FilterClient.
 """
 
-from typing import ClassVar, FrozenSet, Generator, List, Optional, Tuple, Union
+from typing import ClassVar, Dict, FrozenSet, Generator, List, Optional, Tuple, Union
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -69,7 +69,9 @@ class BaseCompressionClient(HTTPClient):
         elif model_name in QS_ENDPOINT_MODELS:
             return ENDPOINTS.COMPRESS_QS, ENDPOINTS.COMPRESS_QS_STREAM
         else:
-            raise ValidationError(f"Model '{model_name}' does not map to a known endpoint.")
+            raise ValidationError(
+                f"Model '{model_name}' does not map to a known endpoint."
+            )
 
     def _do_request(self, endpoint: str, req: CompressRequest) -> CompressResponse:
         """Execute compression request (sync)."""

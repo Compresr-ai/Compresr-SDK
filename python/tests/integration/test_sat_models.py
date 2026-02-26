@@ -10,6 +10,7 @@ Run with:
 import pytest
 
 from compresr import FilterClient
+from compresr.exceptions import ValidationError
 
 COLDBREW_MODEL = "coldbrew_v1"
 

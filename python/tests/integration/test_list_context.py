@@ -118,8 +118,8 @@ class TestLatteListContext:
         assert response.success is True
         assert isinstance(response.data.compressed_context, str)
 
-    def test_list_context_returns_string(self, compression_client):
-        """Test that list context with latte returns joined string (backend behavior)."""
+    def test_list_context_returns_list(self, compression_client):
+        """Test that list context returns list compressed_context."""
         contexts = [
             "Machine learning uses algorithms to find patterns in data.",
             "Deep learning is inspired by biological neural networks.",
@@ -134,9 +134,8 @@ class TestLatteListContext:
         )
 
         assert response.success is True
-        # Latte backend joins list contexts into single string
-        assert isinstance(response.data.compressed_context, str)
-        assert len(response.data.compressed_context) > 0
+        assert isinstance(response.data.compressed_context, list)
+        assert len(response.data.compressed_context) == len(contexts)
 
     def test_list_context_with_same_query(self, compression_client):
         """Test that all contexts are filtered using the same query."""
@@ -172,9 +171,8 @@ class TestLatteListContext:
         )
 
         assert response.success is True
-        # Latte backend joins list contexts into single string
-        assert isinstance(response.data.compressed_context, str)
-        assert len(response.data.compressed_context) > 0
+        assert isinstance(response.data.compressed_context, list)
+        assert len(response.data.compressed_context) == len(contexts)
 
 
 # =============================================================================

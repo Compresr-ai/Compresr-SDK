@@ -93,7 +93,9 @@ class TestContextSizes:
     def test_medium_context(self, admin_client):
         """Test compression with medium context."""
         context = "This is a medium-sized context. " * 20
-        response = admin_client.compress(context=context, compression_model_name="espresso_v1")
+        response = admin_client.compress(
+            context=context, compression_model_name="espresso_v1"
+        )
         assert response.success is True
         assert response.data.original_tokens > 50
 
