@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "compresr"
-version = "2.0.0"
+version = "2.0.2"
 description = "Python SDK for Compresr - Intelligent prompt compression service"
 readme = "README.md"
 license = "LicenseRef-Proprietary"

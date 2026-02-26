@@ -13,9 +13,9 @@ from .base import BaseResponse
 
 
 # Compression ratio constants
+# SDK only validates non-negative; backend enforces full range (0-200)
 class CompressionConfig:
-    MIN_RATIO = 0.1  # Remove minimum 10%
-    MAX_RATIO = 0.9  # Remove maximum 90%
+    MIN_RATIO = 0.0  # Only validate non-negative
     DEFAULT_RATIO = 0.5  # Remove 50%
 
 
@@ -56,9 +56,8 @@ class CompressRequest(BaseModel):
     )
     target_compression_ratio: Optional[float] = Field(
         None,
-        ge=CompressionConfig.MIN_RATIO,
-        le=CompressionConfig.MAX_RATIO,
-        description="Target compression ratio 0.1-0.9 (not supported by filter models)",
+        ge=0.0,  # Only validate non-negative; backend enforces upper bound (200)
+        description="Target compression ratio: 0-1 (strength) or >1 for Nx factor (e.g., 60=60x). Max 200.",
     )
     source: str = Field(default="sdk:python", description="Source of request for analytics")
 

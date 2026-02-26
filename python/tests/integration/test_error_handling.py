@@ -56,12 +56,12 @@ class TestValidationErrors:
             admin_client.compress(context="", compression_model_name="espresso_v1")
 
     def test_invalid_compression_ratio_high(self, admin_client):
-        """Test that ratio > 1.0 raises ValidationError."""
+        """Test that ratio > 200 raises ValidationError (backend limit)."""
         with pytest.raises(ValidationError):
             admin_client.compress(
                 context="Test context",
                 compression_model_name="espresso_v1",
-                target_compression_ratio=1.5,
+                target_compression_ratio=250.0,
             )
 
     def test_invalid_compression_ratio_negative(self, admin_client):

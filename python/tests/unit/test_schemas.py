@@ -39,14 +39,14 @@ class TestCompressRequest:
         with pytest.raises(ValidationError):
             CompressRequest(context="", compression_model_name="espresso_v1")
 
-    def test_invalid_ratio_high_fails(self):
-        """Test that ratio > 1.0 fails validation."""
-        with pytest.raises(ValidationError):
-            CompressRequest(
-                context="Test",
-                compression_model_name="espresso_v1",
-                target_compression_ratio=1.5,
-            )
+    def test_high_ratio_passes(self):
+        """Test that high ratios (e.g., 60x) pass SDK validation - backend enforces upper bound."""
+        req = CompressRequest(
+            context="Test",
+            compression_model_name="espresso_v1",
+            target_compression_ratio=60.0,
+        )
+        assert req.target_compression_ratio == 60.0
 
     def test_invalid_ratio_low_fails(self):
         """Test that ratio < 0 fails validation."""
@@ -208,40 +208,40 @@ class TestBoundaryValidations:
     """Test boundary value validations."""
 
     def test_compression_ratio_at_minimum_boundary(self):
-        """Test compression ratio at minimum allowed value (0.1)."""
+        """Test compression ratio at minimum allowed value (0.0)."""
         req = CompressRequest(
             context="Test",
             compression_model_name="espresso_v1",
-            target_compression_ratio=0.1,
+            target_compression_ratio=0.0,
         )
-        assert req.target_compression_ratio == 0.1
+        assert req.target_compression_ratio == 0.0
 
-    def test_compression_ratio_at_maximum_boundary(self):
-        """Test compression ratio at maximum allowed value (0.9)."""
+    def test_compression_ratio_high_value_allowed(self):
+        """Test high compression ratios are allowed (backend enforces 200 max)."""
         req = CompressRequest(
             context="Test",
             compression_model_name="espresso_v1",
-            target_compression_ratio=0.9,
+            target_compression_ratio=100.0,
         )
-        assert req.target_compression_ratio == 0.9
+        assert req.target_compression_ratio == 100.0
 
-    def test_compression_ratio_below_minimum_fails(self):
-        """Test compression ratio below 0.1 fails."""
+    def test_compression_ratio_negative_fails(self):
+        """Test negative compression ratio fails."""
         with pytest.raises(ValidationError):
             CompressRequest(
                 context="Test",
                 compression_model_name="espresso_v1",
-                target_compression_ratio=0.05,
+                target_compression_ratio=-0.1,
             )
 
-    def test_compression_ratio_above_maximum_fails(self):
-        """Test compression ratio above 0.9 fails."""
-        with pytest.raises(ValidationError):
-            CompressRequest(
-                context="Test",
-                compression_model_name="espresso_v1",
-                target_compression_ratio=0.95,
-            )
+    def test_compression_ratio_very_high_passes(self):
+        """Test very high ratios pass SDK - backend returns error for >200."""
+        req = CompressRequest(
+            context="Test",
+            compression_model_name="espresso_v1",
+            target_compression_ratio=150.0,
+        )
+        assert req.target_compression_ratio == 150.0
 
     def test_query_min_length_validation(self):
         """Test query minimum length validation (min_length=1)."""

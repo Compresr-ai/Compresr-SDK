@@ -214,12 +214,12 @@ class TestErrorHandling:
             )
 
     def test_invalid_compression_ratio_high(self, admin_client):
-        """Test that compression ratio > 0.9 raises error."""
+        """Test that compression ratio > 200 raises error (backend limit)."""
         with pytest.raises(Exception):
             admin_client.compress(
                 context="Test context",
                 compression_model_name=DEFAULT_COMPRESSION_MODEL,
-                target_compression_ratio=1.5,
+                target_compression_ratio=250.0,
             )
 
 
