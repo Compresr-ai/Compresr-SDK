@@ -3,13 +3,13 @@ Compresr Client Classes
 
 Two client types:
 - CompressionClient: Token-level compression, customizable compression_ratio
-- FilterClient: Coarse-grained chunk selection, keeps/drops entire chunks
+- SearchClient: Agentic search over pre-indexed knowledge bases
 """
 
 from .services.compression import CompressionClient
-from .services.filter import FilterClient
+from .services.search import SearchClient
 
 __all__ = [
     "CompressionClient",
-    "FilterClient",
+    "SearchClient",
 ]

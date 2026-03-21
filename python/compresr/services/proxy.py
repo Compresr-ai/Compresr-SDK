@@ -142,6 +142,76 @@ class HTTPClient:
         except Exception as e:
             raise CompresrError(f"Request failed: {str(e)}")
 
+    def get(self, endpoint: str) -> Dict[str, Any]:
+        """Sync GET request."""
+        url = self._url(endpoint)
+        req = Request(url, headers=self._headers, method="GET")
+
+        try:
+            ctx = ssl.create_default_context()
+            with urlopen(req, timeout=self._timeout, context=ctx) as resp:
+                result: Dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+                return result
+        except HTTPError as e:
+            try:
+                err = json.loads(e.read().decode("utf-8"))
+            except Exception:
+                err = {"error": str(e), "detail": e.reason}
+            self._handle_error(e.code, err)
+        except URLError as e:
+            raise CompresrConnectionError(f"Connection failed: {e.reason}")
+        except TimeoutError:
+            raise CompresrConnectionError("Request timed out")
+        except Exception as e:
+            raise CompresrError(f"Request failed: {str(e)}")
+
+    def delete(self, endpoint: str) -> Dict[str, Any]:
+        """Sync DELETE request."""
+        url = self._url(endpoint)
+        req = Request(url, headers=self._headers, method="DELETE")
+
+        try:
+            ctx = ssl.create_default_context()
+            with urlopen(req, timeout=self._timeout, context=ctx) as resp:
+                result: Dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+                return result
+        except HTTPError as e:
+            try:
+                err = json.loads(e.read().decode("utf-8"))
+            except Exception:
+                err = {"error": str(e), "detail": e.reason}
+            self._handle_error(e.code, err)
+        except URLError as e:
+            raise CompresrConnectionError(f"Connection failed: {e.reason}")
+        except TimeoutError:
+            raise CompresrConnectionError("Request timed out")
+        except Exception as e:
+            raise CompresrError(f"Request failed: {str(e)}")
+
+    def post_multipart(self, endpoint: str, files: Dict[str, Any]) -> Dict[str, Any]:
+        """Sync multipart POST request (requires httpx)."""
+        if not HTTPX_AVAILABLE:
+            raise ImportError("Multipart upload requires httpx: pip install httpx")
+
+        url = self._url(endpoint)
+        # Use only auth + user-agent headers; httpx sets Content-Type for multipart
+        mp_headers = {
+            "X-API-Key": self._api_key,
+            "User-Agent": "compresr-python-sdk/2.0.0",
+        }
+
+        try:
+            with httpx.Client(timeout=self._timeout) as client:
+                resp = client.post(url, files=files, headers=mp_headers)
+                body: Dict[str, Any] = resp.json()
+                if resp.status_code >= 400:
+                    self._handle_error(resp.status_code, body)
+                return body
+        except httpx.TimeoutException:
+            raise CompresrConnectionError("Request timed out")
+        except httpx.ConnectError as e:
+            raise CompresrConnectionError(f"Connection failed: {str(e)}")
+
     def stream(self, endpoint: str, data: Dict[str, Any]) -> Generator[str, None, None]:
         """Sync streaming POST request."""
         if not HTTPX_AVAILABLE:
@@ -187,6 +257,46 @@ class HTTPClient:
         url = self._url(endpoint)
         try:
             resp = await self._async_client.post(url, json=data)
+            body: Dict[str, Any] = resp.json()
+            if resp.status_code >= 400:
+                self._handle_error(resp.status_code, body)
+            return body
+        except httpx.TimeoutException:
+            raise CompresrConnectionError("Request timed out")
+        except httpx.ConnectError as e:
+            raise CompresrConnectionError(f"Connection failed: {str(e)}")
+
+    async def get_async(self, endpoint: str) -> Dict[str, Any]:
+        """Async GET request."""
+        if not HTTPX_AVAILABLE:
+            raise ImportError("Async requires httpx: pip install httpx")
+
+        if self._async_client is None:
+            self._async_client = httpx.AsyncClient(timeout=self._timeout, headers=self._headers)
+
+        url = self._url(endpoint)
+        try:
+            resp = await self._async_client.get(url)
+            body: Dict[str, Any] = resp.json()
+            if resp.status_code >= 400:
+                self._handle_error(resp.status_code, body)
+            return body
+        except httpx.TimeoutException:
+            raise CompresrConnectionError("Request timed out")
+        except httpx.ConnectError as e:
+            raise CompresrConnectionError(f"Connection failed: {str(e)}")
+
+    async def delete_async(self, endpoint: str) -> Dict[str, Any]:
+        """Async DELETE request."""
+        if not HTTPX_AVAILABLE:
+            raise ImportError("Async requires httpx: pip install httpx")
+
+        if self._async_client is None:
+            self._async_client = httpx.AsyncClient(timeout=self._timeout, headers=self._headers)
+
+        url = self._url(endpoint)
+        try:
+            resp = await self._async_client.delete(url)
             body: Dict[str, Any] = resp.json()
             if resp.status_code >= 400:
                 self._handle_error(resp.status_code, body)

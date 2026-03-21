@@ -5,7 +5,7 @@ Compress context to reduce LLM costs.
 
 Two client types:
 1. CompressionClient - Token-level compression, customizable compression_ratio
-2. FilterClient - Coarse-grained chunk selection, keeps/drops entire chunks
+2. SearchClient - Agentic search over pre-indexed knowledge bases
 
 Quick Start - Compression:
     from compresr import CompressionClient, MODELS
@@ -23,24 +23,32 @@ Quick Start - Compression:
         compression_model_name="latte_v1",
     )
 
-Quick Start - Filtering:
-    from compresr import FilterClient, MODELS
-
-    client = FilterClient(api_key="cmp_...")
-
-    response = client.filter(
-        chunks=["Chunk 1...", "Chunk 2...", "Chunk 3..."],
-        query="What is relevant?",
+    # Coarse-grained compression (paragraph-level, faster)
+    response = client.compress(
+        context="Your long context...",
+        query="What is the main conclusion?",
+        compression_model_name="latte_v1",
+        coarse=True,  # paragraph-level (faster)
     )
-    print(response.data.compressed_context)  # List[str]
+
+Quick Start - Agentic Search:
+    from compresr import SearchClient, MODELS
+
+    client = SearchClient(api_key="cmp_...")
+
+    response = client.search(
+        query="What is machine learning?",
+        index_name="my-knowledge-base",
+    )
+    print(response.data.chunks)  # List[str]
 """
 
-from .clients import CompressionClient, FilterClient
+from .clients import CompressionClient, SearchClient
 from .config import MODELS
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __all__ = [
     "CompressionClient",
-    "FilterClient",
+    "SearchClient",
     "MODELS",
 ]

@@ -45,6 +45,7 @@ class BaseCompressionClient(HTTPClient):
         compression_model_name: str,
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
+        coarse: Optional[bool] = None,
     ) -> CompressRequest:
         """Build and validate a compression request."""
         self._validate_model(compression_model_name)
@@ -54,6 +55,7 @@ class BaseCompressionClient(HTTPClient):
                 compression_model_name=compression_model_name,
                 query=query,
                 target_compression_ratio=target_compression_ratio,
+                coarse=coarse,
             )
         except PydanticValidationError as e:
             raise ValidationError(str(e)) from e

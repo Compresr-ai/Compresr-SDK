@@ -152,6 +152,206 @@ class TestStreamChunk:
 
 
 # =============================================================================
+# Batch Compression Schema Tests
+# =============================================================================
+
+
+class TestCompressBatchInput:
+    """Test CompressBatchInput schema."""
+
+    def test_valid_input(self):
+        """Test valid batch input."""
+        from compresr.schemas import CompressBatchInput
+
+        inp = CompressBatchInput(context="Test context", query="Test query?")
+        assert inp.context == "Test context"
+        assert inp.query == "Test query?"
+
+    def test_empty_context_fails(self):
+        """Test empty context fails validation."""
+        from compresr.schemas import CompressBatchInput
+
+        with pytest.raises(ValidationError):
+            CompressBatchInput(context="", query="Test query?")
+
+    def test_empty_query_fails(self):
+        """Test empty query fails validation."""
+        from compresr.schemas import CompressBatchInput
+
+        with pytest.raises(ValidationError):
+            CompressBatchInput(context="Test context", query="")
+
+
+class TestCompressBatchRequest:
+    """Test CompressBatchRequest schema."""
+
+    def test_valid_request(self):
+        """Test valid batch request."""
+        from compresr.schemas import CompressBatchInput, CompressBatchRequest
+
+        inputs = [
+            CompressBatchInput(context="Context 1", query="Query 1"),
+            CompressBatchInput(context="Context 2", query="Query 2"),
+        ]
+        req = CompressBatchRequest(
+            inputs=inputs,
+            compression_model_name="latte_v1",
+        )
+        assert len(req.inputs) == 2
+        assert req.compression_model_name == "latte_v1"
+        assert req.source == "sdk:python"
+
+    def test_request_with_options(self):
+        """Test batch request with optional parameters."""
+        from compresr.schemas import CompressBatchInput, CompressBatchRequest
+
+        inputs = [CompressBatchInput(context="C1", query="Q1")]
+        req = CompressBatchRequest(
+            inputs=inputs,
+            compression_model_name="latte_v1",
+            target_compression_ratio=0.5,
+            coarse=True,
+        )
+        assert req.target_compression_ratio == 0.5
+        assert req.coarse is True
+
+    def test_empty_inputs_fails(self):
+        """Test empty inputs list fails."""
+        from compresr.schemas import CompressBatchRequest
+
+        with pytest.raises(ValidationError):
+            CompressBatchRequest(
+                inputs=[],
+                compression_model_name="latte_v1",
+            )
+
+    def test_max_inputs_limit(self):
+        """Test maximum 100 inputs limit."""
+        from compresr.schemas import CompressBatchInput, CompressBatchRequest
+
+        inputs = [CompressBatchInput(context=f"C{i}", query=f"Q{i}") for i in range(101)]
+        with pytest.raises(ValidationError):
+            CompressBatchRequest(
+                inputs=inputs,
+                compression_model_name="latte_v1",
+            )
+
+
+class TestCompressBatchItemResult:
+    """Test CompressBatchItemResult schema."""
+
+    def test_valid_item_result(self):
+        """Test valid batch item result."""
+        from compresr.schemas import CompressBatchItemResult
+
+        result = CompressBatchItemResult(
+            original_context="Original",
+            compressed_context="Compressed",
+            original_tokens=100,
+            compressed_tokens=50,
+            actual_compression_ratio=0.5,
+            tokens_saved=50,
+            duration_ms=100,
+        )
+        assert result.original_context == "Original"
+        assert result.compressed_context == "Compressed"
+        assert result.tokens_saved == 50
+
+
+class TestCompressBatchResult:
+    """Test CompressBatchResult schema."""
+
+    def test_valid_batch_result(self):
+        """Test valid batch result with items."""
+        from compresr.schemas import CompressBatchItemResult, CompressBatchResult
+
+        items = [
+            CompressBatchItemResult(
+                original_context="Orig1",
+                compressed_context="Comp1",
+                original_tokens=100,
+                compressed_tokens=50,
+                actual_compression_ratio=0.5,
+                tokens_saved=50,
+                duration_ms=50,
+            ),
+            CompressBatchItemResult(
+                original_context="Orig2",
+                compressed_context="Comp2",
+                original_tokens=80,
+                compressed_tokens=40,
+                actual_compression_ratio=0.5,
+                tokens_saved=40,
+                duration_ms=40,
+            ),
+        ]
+        result = CompressBatchResult(
+            results=items,
+            total_original_tokens=180,
+            total_compressed_tokens=90,
+            total_tokens_saved=90,
+            average_compression_ratio=0.5,
+            count=2,
+        )
+        assert result.count == 2
+        assert result.total_original_tokens == 180
+        assert result.total_compressed_tokens == 90
+        assert len(result.results) == 2
+
+    def test_empty_batch_result_defaults(self):
+        """Test batch result with default values."""
+        from compresr.schemas import CompressBatchResult
+
+        result = CompressBatchResult()
+        assert result.count == 0
+        assert result.total_original_tokens == 0
+        assert result.results == []
+
+
+class TestCompressBatchResponse:
+    """Test CompressBatchResponse schema."""
+
+    def test_valid_response(self):
+        """Test valid batch response."""
+        from compresr.schemas import (
+            CompressBatchItemResult,
+            CompressBatchResponse,
+            CompressBatchResult,
+        )
+
+        data = CompressBatchResult(
+            results=[
+                CompressBatchItemResult(
+                    original_context="O",
+                    compressed_context="C",
+                    original_tokens=10,
+                    compressed_tokens=5,
+                    actual_compression_ratio=0.5,
+                    tokens_saved=5,
+                    duration_ms=10,
+                )
+            ],
+            total_original_tokens=10,
+            total_compressed_tokens=5,
+            total_tokens_saved=5,
+            average_compression_ratio=0.5,
+            count=1,
+        )
+        response = CompressBatchResponse(success=True, data=data)
+        assert response.success is True
+        assert response.data.count == 1
+
+    def test_error_response(self):
+        """Test batch error response."""
+        from compresr.schemas import CompressBatchResponse
+
+        response = CompressBatchResponse(success=False, message="Batch failed")
+        assert response.success is False
+        assert response.message == "Batch failed"
+        assert response.data is None
+
+
+# =============================================================================
 # Hard Edge Case Tests
 # =============================================================================
 

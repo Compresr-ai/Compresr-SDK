@@ -9,7 +9,7 @@ import pytest
 from compresr.config import (
     AGNOSTIC_ENDPOINT_MODELS,
     ALLOWED_COMPRESSION_MODELS,
-    ALLOWED_FILTER_MODELS,
+    COARSE_SUPPORTED_MODELS,
     QS_ENDPOINT_MODELS,
     QUERY_REQUIRED_MODELS,
     APIConfig,
@@ -50,6 +50,7 @@ class TestEndpoints:
         endpoints = Endpoints()
         assert endpoints.COMPRESS_QS == "/api/compress/question-specific/"
         assert endpoints.COMPRESS_QS_STREAM == "/api/compress/question-specific/stream"
+        assert endpoints.COMPRESS_QS_BATCH == "/api/compress/question-specific/batch"
 
     def test_endpoints_start_with_api(self):
         """Test all endpoints start with /api/."""
@@ -74,15 +75,14 @@ class TestModelGroups:
         assert "latte_v1" in ALLOWED_COMPRESSION_MODELS
         assert len(ALLOWED_COMPRESSION_MODELS) == 2
 
-    def test_filter_models(self):
-        """Test allowed filter models."""
-        assert "coldbrew_v1" in ALLOWED_FILTER_MODELS
-        assert len(ALLOWED_FILTER_MODELS) == 1
+    def test_coarse_supported_models(self):
+        """Test coarse-supported models."""
+        assert "latte_v1" in COARSE_SUPPORTED_MODELS
+        assert "espresso_v1" not in COARSE_SUPPORTED_MODELS
 
     def test_query_required_models(self):
         """Test query required models."""
         assert "latte_v1" in QUERY_REQUIRED_MODELS
-        assert "coldbrew_v1" in QUERY_REQUIRED_MODELS
         assert "espresso_v1" not in QUERY_REQUIRED_MODELS
 
     def test_agnostic_endpoint_models(self):
@@ -93,7 +93,6 @@ class TestModelGroups:
     def test_qs_endpoint_models(self):
         """Test QS endpoint models."""
         assert "latte_v1" in QS_ENDPOINT_MODELS
-        assert "coldbrew_v1" in QS_ENDPOINT_MODELS
         assert "espresso_v1" not in QS_ENDPOINT_MODELS
 
 

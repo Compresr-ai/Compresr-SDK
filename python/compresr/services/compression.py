@@ -11,9 +11,15 @@ Models:
 
 from typing import Generator, List, Optional, Union
 
-from ..config import ALLOWED_COMPRESSION_MODELS, QUERY_REQUIRED_MODELS
+from ..config import ALLOWED_COMPRESSION_MODELS, ENDPOINTS, QUERY_REQUIRED_MODELS
 from ..exceptions import ValidationError
-from ..schemas import CompressResponse, StreamChunk
+from ..schemas import (
+    CompressBatchInput,
+    CompressBatchRequest,
+    CompressBatchResponse,
+    CompressResponse,
+    StreamChunk,
+)
 from .base import BaseCompressionClient
 
 
@@ -66,6 +72,7 @@ class CompressionClient(BaseCompressionClient):
         compression_model_name: str = "espresso_v1",
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
+        coarse: Optional[bool] = None,
     ) -> CompressResponse:
         """
         Compress context(s) (sync).
@@ -79,12 +86,16 @@ class CompressionClient(BaseCompressionClient):
                 - "latte_v1": Query REQUIRED
             query: Query for query-specific compression (required for latte_v1)
             target_compression_ratio: Ratio 0.1-0.9 (percentage to REMOVE)
+            coarse: True for paragraph-level (faster), False/None for token-level (default).
+                    Only applicable for latte_v1.
 
         Returns:
             CompressResponse with compressed context and metrics
         """
         self._validate_query_for_model(compression_model_name, query)
-        req = self._build_request(context, compression_model_name, query, target_compression_ratio)
+        req = self._build_request(
+            context, compression_model_name, query, target_compression_ratio, coarse
+        )
         endpoint, _ = self._resolve_endpoints(compression_model_name)
         return self._do_request(endpoint, req)
 
@@ -94,6 +105,7 @@ class CompressionClient(BaseCompressionClient):
         compression_model_name: str = "espresso_v1",
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
+        coarse: Optional[bool] = None,
     ) -> Generator[StreamChunk, None, None]:
         """
         Stream compression (sync). Only supports single string context.
@@ -103,12 +115,16 @@ class CompressionClient(BaseCompressionClient):
             compression_model_name: Compression model to use
             query: Query for query-specific compression (required for latte_v1)
             target_compression_ratio: Target ratio (optional)
+            coarse: True for paragraph-level (faster), False/None for token-level (default).
+                    Only applicable for latte_v1.
 
         Yields:
             StreamChunk objects with compressed content
         """
         self._validate_query_for_model(compression_model_name, query)
-        req = self._build_request(context, compression_model_name, query, target_compression_ratio)
+        req = self._build_request(
+            context, compression_model_name, query, target_compression_ratio, coarse
+        )
         _, stream_endpoint = self._resolve_endpoints(compression_model_name)
         yield from self._do_stream(stream_endpoint, req)
 
@@ -120,6 +136,7 @@ class CompressionClient(BaseCompressionClient):
         compression_model_name: str = "espresso_v1",
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
+        coarse: Optional[bool] = None,
     ) -> CompressResponse:
         """
         Compress context(s) (async).
@@ -129,11 +146,130 @@ class CompressionClient(BaseCompressionClient):
             compression_model_name: Compression model to use
             query: Query for query-specific compression (required for latte_v1)
             target_compression_ratio: Target ratio (optional)
+            coarse: True for paragraph-level (faster), False/None for token-level (default).
+                    Only applicable for latte_v1.
 
         Returns:
             CompressResponse with compressed context and metrics
         """
         self._validate_query_for_model(compression_model_name, query)
-        req = self._build_request(context, compression_model_name, query, target_compression_ratio)
+        req = self._build_request(
+            context, compression_model_name, query, target_compression_ratio, coarse
+        )
         endpoint, _ = self._resolve_endpoints(compression_model_name)
         return await self._do_request_async(endpoint, req)
+
+    # ==================== Batch ====================
+
+    def compress_batch(
+        self,
+        contexts: List[str],
+        queries: Union[str, List[str]],
+        compression_model_name: str = "latte_v1",
+        target_compression_ratio: Optional[float] = None,
+        coarse: Optional[bool] = None,
+    ) -> CompressBatchResponse:
+        """
+        Batch compress multiple contexts with queries (sync).
+
+        This is more efficient than calling compress() multiple times
+        when you have many documents to compress.
+
+        Args:
+            contexts: List of context strings to compress (1-100 items)
+            queries: Either:
+                - Single query string (same for all contexts)
+                - List of queries (one per context, must match contexts length)
+            compression_model_name: Compression model (only "latte_v1" supported)
+            target_compression_ratio: Target ratio (optional): 0-1 or >1 for Nx
+            coarse: True for paragraph-level (faster), False/None for token-level
+
+        Returns:
+            CompressBatchResponse with results for each context and aggregated metrics
+
+        Example with same query:
+            response = client.compress_batch(
+                contexts=["Doc 1...", "Doc 2...", "Doc 3..."],
+                queries="What are the key points?",
+            )
+
+        Example with different queries:
+            response = client.compress_batch(
+                contexts=["Doc about ML...", "Doc about NLP...", "Doc about CV..."],
+                queries=["What is ML?", "What is NLP?", "What is CV?"],
+            )
+        """
+        if compression_model_name not in QUERY_REQUIRED_MODELS:
+            raise ValidationError(
+                f"Batch compression only supports query-specific models: {list(QUERY_REQUIRED_MODELS)}"
+            )
+        self._validate_model(compression_model_name)
+
+        # Handle single query vs list of queries
+        if isinstance(queries, str):
+            query_list = [queries] * len(contexts)
+        else:
+            if len(queries) != len(contexts):
+                raise ValidationError(
+                    f"Number of queries ({len(queries)}) must match number of contexts ({len(contexts)})"
+                )
+            query_list = queries
+
+        inputs = [CompressBatchInput(context=ctx, query=q) for ctx, q in zip(contexts, query_list)]
+        req = CompressBatchRequest(
+            inputs=inputs,
+            compression_model_name=compression_model_name,
+            target_compression_ratio=target_compression_ratio,
+            coarse=coarse,
+        )
+        data = self.post(ENDPOINTS.COMPRESS_QS_BATCH, req.model_dump(exclude_none=True))
+        return CompressBatchResponse.model_validate(data)
+
+    async def compress_batch_async(
+        self,
+        contexts: List[str],
+        queries: Union[str, List[str]],
+        compression_model_name: str = "latte_v1",
+        target_compression_ratio: Optional[float] = None,
+        coarse: Optional[bool] = None,
+    ) -> CompressBatchResponse:
+        """
+        Batch compress multiple contexts with queries (async).
+
+        Args:
+            contexts: List of context strings to compress (1-100 items)
+            queries: Either:
+                - Single query string (same for all contexts)
+                - List of queries (one per context, must match contexts length)
+            compression_model_name: Compression model (only "latte_v1" supported)
+            target_compression_ratio: Target ratio (optional): 0-1 or >1 for Nx
+            coarse: True for paragraph-level (faster), False/None for token-level
+
+        Returns:
+            CompressBatchResponse with results for each context and aggregated metrics
+        """
+        if compression_model_name not in QUERY_REQUIRED_MODELS:
+            raise ValidationError(
+                f"Batch compression only supports query-specific models: {list(QUERY_REQUIRED_MODELS)}"
+            )
+        self._validate_model(compression_model_name)
+
+        # Handle single query vs list of queries
+        if isinstance(queries, str):
+            query_list = [queries] * len(contexts)
+        else:
+            if len(queries) != len(contexts):
+                raise ValidationError(
+                    f"Number of queries ({len(queries)}) must match number of contexts ({len(contexts)})"
+                )
+            query_list = queries
+
+        inputs = [CompressBatchInput(context=ctx, query=q) for ctx, q in zip(contexts, query_list)]
+        req = CompressBatchRequest(
+            inputs=inputs,
+            compression_model_name=compression_model_name,
+            target_compression_ratio=target_compression_ratio,
+            coarse=coarse,
+        )
+        data = await self.post_async(ENDPOINTS.COMPRESS_QS_BATCH, req.model_dump(exclude_none=True))
+        return CompressBatchResponse.model_validate(data)

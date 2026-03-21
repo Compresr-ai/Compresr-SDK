@@ -105,6 +105,234 @@ class TestLatteCompression:
         assert response.data.actual_compression_ratio is not None
 
 
+class TestCoarseCompression:
+    """Tests for coarse (paragraph-level) compression."""
+
+    def test_coarse_true(self, admin_client):
+        """Test latte_v1 with coarse=True (paragraph-level)."""
+        context = """
+        Machine learning is a subset of artificial intelligence that enables
+        systems to learn from data. Deep learning uses neural networks with
+        many layers. Natural language processing deals with text and speech.
+        """
+        response = admin_client.compress(
+            context=context,
+            query="What is machine learning?",
+            compression_model_name="latte_v1",
+            coarse=True,
+        )
+
+        assert response.success is True
+        assert response.data.compressed_context is not None
+
+    def test_coarse_false(self, admin_client):
+        """Test latte_v1 with coarse=False (token-level)."""
+        context = """
+        Machine learning is a subset of artificial intelligence that enables
+        systems to learn from data. Deep learning uses neural networks with
+        many layers. Natural language processing deals with text and speech.
+        """
+        response = admin_client.compress(
+            context=context,
+            query="What is machine learning?",
+            compression_model_name="latte_v1",
+            coarse=False,
+        )
+
+        assert response.success is True
+        assert response.data.compressed_context is not None
+
+    def test_coarse_with_ratio(self, admin_client):
+        """Test coarse compression with target ratio."""
+        response = admin_client.compress(
+            context="Climate change affects weather. Renewable energy helps. Electric vehicles reduce emissions.",
+            query="What are the effects of climate change?",
+            compression_model_name="latte_v1",
+            target_compression_ratio=0.5,
+            coarse=True,
+        )
+
+        assert response.success is True
+        assert response.data.actual_compression_ratio is not None
+
+    @pytest.mark.asyncio
+    async def test_async_coarse(self, admin_client):
+        """Test async compression with coarse=True."""
+        response = await admin_client.compress_async(
+            context="AI is transforming industries. Healthcare uses AI. Finance uses AI.",
+            query="How is AI used?",
+            compression_model_name="latte_v1",
+            coarse=True,
+        )
+
+        assert response.success is True
+        assert response.data.compressed_context is not None
+
+
+class TestBatchCompression:
+    """Tests for batch compression with compress_batch()."""
+
+    def test_batch_with_single_query(self, admin_client):
+        """Test batch compression with same query for all contexts."""
+        contexts = [
+            "Machine learning enables systems to learn from data automatically.",
+            "Deep learning uses neural networks with multiple hidden layers.",
+            "Natural language processing helps computers understand human text.",
+        ]
+        response = admin_client.compress_batch(
+            contexts=contexts,
+            queries="What is this technology about?",
+            compression_model_name="latte_v1",
+        )
+
+        assert response.success is True
+        assert response.data is not None
+        assert response.data.count == 3
+        assert len(response.data.results) == 3
+        assert response.data.total_original_tokens > 0
+        assert response.data.total_compressed_tokens > 0
+        assert response.data.average_compression_ratio >= 0
+
+    def test_batch_with_different_queries(self, admin_client):
+        """Test batch compression with different query per context."""
+        contexts = [
+            "Machine learning enables systems to learn from data automatically.",
+            "Deep learning uses neural networks with multiple hidden layers.",
+            "Natural language processing helps computers understand human text.",
+        ]
+        queries = [
+            "What is machine learning?",
+            "What is deep learning?",
+            "What is NLP?",
+        ]
+        response = admin_client.compress_batch(
+            contexts=contexts,
+            queries=queries,
+            compression_model_name="latte_v1",
+        )
+
+        assert response.success is True
+        assert response.data.count == 3
+        for result in response.data.results:
+            assert result.compressed_context is not None
+            assert result.original_tokens > 0
+            assert result.compressed_tokens > 0
+
+    def test_batch_with_coarse(self, admin_client):
+        """Test batch compression with coarse=True."""
+        contexts = [
+            "AI is transforming healthcare with diagnostic tools.",
+            "Finance uses AI for fraud detection and trading.",
+        ]
+        response = admin_client.compress_batch(
+            contexts=contexts,
+            queries="How is AI used?",
+            compression_model_name="latte_v1",
+            coarse=True,
+        )
+
+        assert response.success is True
+        assert response.data.count == 2
+
+    def test_batch_with_ratio(self, admin_client):
+        """Test batch compression with target compression ratio."""
+        contexts = [
+            "Machine learning is a subset of AI that enables systems to learn.",
+            "Deep learning uses neural networks with many layers for patterns.",
+        ]
+        response = admin_client.compress_batch(
+            contexts=contexts,
+            queries="Explain this technology.",
+            compression_model_name="latte_v1",
+            target_compression_ratio=0.5,
+        )
+
+        assert response.success is True
+        assert response.data.average_compression_ratio is not None
+
+    def test_batch_result_structure(self, admin_client):
+        """Test batch response has all expected fields."""
+        contexts = ["AI enables automation.", "ML learns from data."]
+        response = admin_client.compress_batch(
+            contexts=contexts,
+            queries="What is this?",
+            compression_model_name="latte_v1",
+        )
+
+        assert response.data.count == 2
+        assert response.data.total_original_tokens > 0
+        assert response.data.total_compressed_tokens > 0
+        assert response.data.total_tokens_saved >= 0
+        assert response.data.average_compression_ratio >= 0
+
+        for result in response.data.results:
+            assert hasattr(result, "original_context")
+            assert hasattr(result, "compressed_context")
+            assert hasattr(result, "original_tokens")
+            assert hasattr(result, "compressed_tokens")
+            assert hasattr(result, "actual_compression_ratio")
+            assert hasattr(result, "tokens_saved")
+            assert hasattr(result, "duration_ms")
+
+    @pytest.mark.asyncio
+    async def test_async_batch_single_query(self, admin_client):
+        """Test async batch compression with single query."""
+        contexts = ["AI runs on data.", "ML models learn patterns."]
+        response = await admin_client.compress_batch_async(
+            contexts=contexts,
+            queries="What is this about?",
+            compression_model_name="latte_v1",
+        )
+
+        assert response.success is True
+        assert response.data.count == 2
+
+    @pytest.mark.asyncio
+    async def test_async_batch_different_queries(self, admin_client):
+        """Test async batch compression with different queries."""
+        contexts = ["AI automates tasks.", "ML predicts outcomes."]
+        queries = ["What does AI do?", "What does ML do?"]
+        response = await admin_client.compress_batch_async(
+            contexts=contexts,
+            queries=queries,
+            compression_model_name="latte_v1",
+        )
+
+        assert response.success is True
+        assert response.data.count == 2
+
+    def test_batch_mismatched_queries_raises_error(self, admin_client):
+        """Test that mismatched queries length raises ValidationError."""
+        from compresr.exceptions import ValidationError
+
+        contexts = ["Context 1", "Context 2", "Context 3"]
+        queries = ["Query 1", "Query 2"]  # Only 2, but 3 contexts
+
+        with pytest.raises(ValidationError) as exc_info:
+            admin_client.compress_batch(
+                contexts=contexts,
+                queries=queries,
+                compression_model_name="latte_v1",
+            )
+
+        assert "must match" in str(exc_info.value).lower()
+
+    def test_batch_invalid_model_raises_error(self, admin_client):
+        """Test that non-query models raise ValidationError for batch."""
+        from compresr.exceptions import ValidationError
+
+        contexts = ["Context 1", "Context 2"]
+
+        with pytest.raises(ValidationError) as exc_info:
+            admin_client.compress_batch(
+                contexts=contexts,
+                queries="test query",
+                compression_model_name="espresso_v1",  # Not supported for batch
+            )
+
+        assert "query-specific" in str(exc_info.value).lower()
+
+
 class TestCompressionRatio:
     """Tests for compression ratio control."""
 

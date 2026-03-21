@@ -16,6 +16,7 @@ API_KEY="${COMPRESR_API_KEY:?Error: Set COMPRESR_API_KEY in ../.env}"
 
 echo "Query-Specific Compression..."
 echo "This compresses context while preserving information relevant to the query."
+echo "Use coarse=true for paragraph-level (faster), coarse=false for token-level (default)."
 echo ""
 
 curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
@@ -26,5 +27,6 @@ curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
     "query": "What is machine learning?",
     "compression_model_name": "latte_v1",
     "target_compression_ratio": 0.5,
+    "coarse": false,
     "source": "sdk:curl"
   }' | jq .

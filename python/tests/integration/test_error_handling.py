@@ -6,7 +6,7 @@ Tests how the SDK handles various error scenarios from the API.
 
 import pytest
 
-from compresr import CompressionClient, FilterClient
+from compresr import CompressionClient
 from compresr.exceptions import AuthenticationError, CompresrError, ServerError, ValidationError
 
 
@@ -14,12 +14,6 @@ from compresr.exceptions import AuthenticationError, CompresrError, ServerError,
 def client_with_invalid_key():
     """Create client with invalid API key."""
     return CompressionClient(api_key="cmp_invalid_key_12345")
-
-
-@pytest.fixture
-def filter_client_with_invalid_key():
-    """Create filter client with invalid API key."""
-    return FilterClient(api_key="cmp_invalid_key_12345")
 
 
 class TestAuthenticationErrors:
@@ -36,15 +30,6 @@ class TestAuthenticationErrors:
         """Test that missing API key raises AuthenticationError."""
         with pytest.raises(AuthenticationError):
             CompressionClient(api_key="")
-
-    def test_filter_invalid_api_key(self, filter_client_with_invalid_key):
-        """Test that invalid API key raises AuthenticationError for FilterClient."""
-        with pytest.raises(AuthenticationError):
-            filter_client_with_invalid_key.filter(
-                chunks=["Test chunk"],
-                query="Test query?",
-                compression_model_name="coldbrew_v1",
-            )
 
 
 class TestValidationErrors:
@@ -79,23 +64,6 @@ class TestValidationErrors:
             admin_client.compress(
                 context="Test context", compression_model_name="invalid_model_xyz"
             )
-
-
-class TestFilterErrors:
-    """Test filter-specific error handling."""
-
-    def test_filter_empty_chunks(self, admin_api_key):
-        """Test that empty chunks list raises error."""
-        if not admin_api_key:
-            pytest.skip("Admin API key not available")
-        client = FilterClient(api_key=admin_api_key)
-        with pytest.raises(ValidationError):
-            client.filter(chunks=[], query="Test?", compression_model_name="coldbrew_v1")
-
-    def test_filter_missing_api_key(self):
-        """Test that missing API key raises AuthenticationError for FilterClient."""
-        with pytest.raises(AuthenticationError):
-            FilterClient(api_key="")
 
 
 class TestAsyncErrors:

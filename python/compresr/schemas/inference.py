@@ -52,12 +52,16 @@ class CompressRequest(BaseModel):
     query: Optional[str] = Field(
         None,
         min_length=1,
-        description="Query for query-specific models (required for latte_v1, coldbrew_v1)",
+        description="Query for query-specific models (required for latte_v1)",
     )
     target_compression_ratio: Optional[float] = Field(
         None,
         ge=0.0,  # Only validate non-negative; backend enforces upper bound (200)
         description="Target compression ratio: 0-1 (strength) or >1 for Nx factor (e.g., 60=60x). Max 200.",
+    )
+    coarse: Optional[bool] = Field(
+        None,
+        description="Coarse-grained (paragraph-level) compression. True=faster, False=token-level (default). Only for latte_v1.",
     )
     source: str = Field(default="sdk:python", description="Source of request for analytics")
 
@@ -111,3 +115,67 @@ class CompressResponse(BaseResponse):
     """Response for single compression."""
 
     data: Optional[CompressResult] = None
+
+
+# =============================================================================
+# Batch Compression
+# =============================================================================
+
+
+class CompressBatchInput(BaseModel):
+    """A single input in a batch compression request."""
+
+    context: str = Field(..., min_length=1, description="Context text to compress")
+    query: str = Field(..., min_length=1, description="Query for this context (required)")
+
+
+class CompressBatchRequest(BaseModel):
+    """Batch request for question-specific compression."""
+
+    inputs: List[CompressBatchInput] = Field(
+        ..., min_length=1, max_length=100, description="List of context+query pairs"
+    )
+    compression_model_name: str = Field(..., description="Compression model to use")
+    target_compression_ratio: Optional[float] = Field(
+        None,
+        ge=0.0,
+        description="Target compression ratio: 0-1 (strength) or >1 for Nx factor",
+    )
+    coarse: Optional[bool] = Field(
+        None,
+        description="Coarse-grained (paragraph-level) compression. Only for latte_v1.",
+    )
+    source: str = Field(default="sdk:python", description="Source of request")
+
+
+class CompressBatchItemResult(BaseModel):
+    """Result for a single item in batch compression."""
+
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    original_context: str
+    compressed_context: str
+    original_tokens: int
+    compressed_tokens: int
+    actual_compression_ratio: float
+    tokens_saved: int
+    duration_ms: int
+
+
+class CompressBatchResult(BaseModel):
+    """Batch compression result with aggregated metrics."""
+
+    model_config = {"from_attributes": True, "protected_namespaces": ()}
+
+    results: List[CompressBatchItemResult] = Field(default_factory=list)
+    total_original_tokens: int = 0
+    total_compressed_tokens: int = 0
+    total_tokens_saved: int = 0
+    average_compression_ratio: float = 0.0
+    count: int = 0
+
+
+class CompressBatchResponse(BaseResponse):
+    """Response for batch compression."""
+
+    data: Optional[CompressBatchResult] = None

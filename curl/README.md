@@ -48,18 +48,19 @@ curl -X POST "https://api.compresr.ai/api/compress/question-specific/" \
   }'
 ```
 
-### 5. Chunk-Level Filtering
+### 5. Coarse-Grained Compression (Faster)
 
-Keep or drop entire chunks based on query relevance — no rewriting. Best when your retriever returns many chunks and you want to discard irrelevant ones before stuffing them into a prompt.
+Use `coarse=true` for paragraph-level compression (faster) instead of token-level (default).
 
 ```bash
 curl -X POST "https://api.compresr.ai/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
-    "context": ["Chunk about Python...", "Chunk about Java...", "Chunk about ML..."],
+    "context": "Your long context...",
     "query": "What is Python?",
-    "compression_model_name": "coldbrew_v1"
+    "compression_model_name": "latte_v1",
+    "coarse": true
   }'
 ```
 
@@ -96,11 +97,12 @@ curl -X POST "https://api.compresr.ai/api/compress/question-specific/" \
 | `espresso_v1` | Not needed | System prompts, documents, general context |
 | `latte_v1` | **Required** | RAG / QA — preserve answer-relevant tokens |
 
-### Filter Models
+### Coarse Parameter (latte_v1 only)
 
-| Model | Query | Best For |
-|-------|-------|----------|
-| `coldbrew_v1` | **Required** | RAG chunk selection — drop irrelevant chunks |
+| coarse | Level | Speed | Best For |
+|--------|-------|-------|----------|
+| `false` (default) | Token-level | Slower | Maximum precision |
+| `true` | Paragraph-level | Faster | Large contexts, speed-sensitive apps |
 
 ## Usage
 

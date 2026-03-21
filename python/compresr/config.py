@@ -36,6 +36,19 @@ class Endpoints:
     # Query-specific compression (query required)
     COMPRESS_QS: str = "/api/compress/question-specific/"
     COMPRESS_QS_STREAM: str = "/api/compress/question-specific/stream"
+    COMPRESS_QS_BATCH: str = "/api/compress/question-specific/batch"
+
+    # Agentic search (query + index_name required)
+    SEARCH: str = "/api/compress/search/"
+    SEARCH_STREAM: str = "/api/compress/search/stream"
+
+    # Index management (for agentic search)
+    SEARCH_INDEX_CREATE: str = "/api/compress/search/indexes/{index_name}"
+    SEARCH_INDEX_TASK: str = "/api/compress/search/indexes/tasks/{task_id}"
+    SEARCH_INDEX_DELETE: str = "/api/compress/search/indexes/{index_name}"
+
+    # Health
+    SEARCH_HEALTH: str = "/api/compress/search/health"
 
 
 @dataclass(frozen=True)
@@ -69,10 +82,10 @@ class Models:
 
     Compression models (CompressionClient):
     - espresso_v1: Agnostic compression (default) - no query needed
-    - latte_v1: Query-specific compression - query REQUIRED, supports compression_ratio
+    - latte_v1: Query-specific compression - query REQUIRED, supports compression_ratio and coarse
 
-    Filter models (FilterClient):
-    - coldbrew_v1: Chunk-level filter - query REQUIRED, no compression_ratio
+    Search models (SearchClient):
+    - macchiato_v1: Agentic search over indexed knowledge bases - query + index_name REQUIRED
 
     Agentic models (for tool/history compression):
     - agentic_history_lingua: History compression (Lingua) - no query
@@ -85,8 +98,8 @@ class Models:
     ESPRESSO: str = "espresso_v1"
     LATTE: str = "latte_v1"
 
-    # Filter models
-    COLDBREW: str = "coldbrew_v1"
+    # Search models
+    MACCHIATO: str = "macchiato_v1"
 
     # Agentic models
     AGENTIC_HISTORY_LINGUA: str = "agentic_history_lingua"
@@ -96,20 +109,23 @@ class Models:
 
     # Default model aliases
     DEFAULT_COMPRESSION: str = "espresso_v1"
-    DEFAULT_FILTER: str = "coldbrew_v1"
+    DEFAULT_SEARCH: str = "macchiato_v1"
     DEFAULT: str = "espresso_v1"
 
 
 # Allowed models per client type
 ALLOWED_COMPRESSION_MODELS = frozenset({"espresso_v1", "latte_v1"})
-ALLOWED_FILTER_MODELS = frozenset({"coldbrew_v1"})
+ALLOWED_SEARCH_MODELS = frozenset({"macchiato_v1"})
 
 # Models that require a query parameter
-QUERY_REQUIRED_MODELS = frozenset({"latte_v1", "coldbrew_v1"})
+QUERY_REQUIRED_MODELS = frozenset({"latte_v1"})
+
+# Models that support coarse parameter
+COARSE_SUPPORTED_MODELS = frozenset({"latte_v1"})
 
 # Endpoint routing
 AGNOSTIC_ENDPOINT_MODELS = frozenset({"espresso_v1"})
-QS_ENDPOINT_MODELS = frozenset({"latte_v1", "coldbrew_v1"})
+QS_ENDPOINT_MODELS = frozenset({"latte_v1"})
 
 
 # Singleton instances

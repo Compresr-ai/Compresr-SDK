@@ -25,8 +25,18 @@ from ..exceptions import (  # Response models; Exception classes
 )
 
 # Import local schemas
+from .agentic_search import (
+    SearchRequest,
+    SearchResponse,
+    SearchResult,
+)
 from .base import BaseResponse, MessageResponse
 from .inference import (  # Streaming; Compression
+    CompressBatchInput,
+    CompressBatchItemResult,
+    CompressBatchRequest,
+    CompressBatchResponse,
+    CompressBatchResult,
     CompressRequest,
     CompressResponse,
     CompressResult,
@@ -67,6 +77,16 @@ __all__ = [
     "CompressRequest",
     "CompressResponse",
     "CompressResult",
+    # Batch Compression
+    "CompressBatchInput",
+    "CompressBatchRequest",
+    "CompressBatchResult",
+    "CompressBatchItemResult",
+    "CompressBatchResponse",
+    # Agentic Search
+    "SearchRequest",
+    "SearchResponse",
+    "SearchResult",
     # Tool Discovery
     "DeferredTool",
     "ToolDiscoverySearchRequest",

@@ -40,30 +40,8 @@ else
 fi
 echo ""
 
-# Test 2: coldbrew_v1 (query specific - no compression_ratio support)
-echo "2. Testing coldbrew_v1..."
-RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $COMPRESR_API_KEY" \
-  -d "{
-    \"context\": \"$CONTEXT\",
-    \"query\": \"$QUERY\",
-    \"compression_model_name\": \"coldbrew_v1\",
-    \"source\": \"sdk:curl\"
-  }")
-
-if echo "$RESPONSE" | jq -e '.data.compressed_context' > /dev/null 2>&1; then
-    echo "   ✓ coldbrew_v1 passed"
-    ((++PASSED))
-else
-    echo "   ✗ coldbrew_v1 failed"
-    echo "   Response: $RESPONSE"
-    ((++FAILED))
-fi
-echo ""
-
-# Test 3: latte_v1 (query specific)
-echo "3. Testing latte_v1..."
+# Test 2: latte_v1 (query specific, token-level)
+echo "2. Testing latte_v1 (token-level)..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
@@ -71,14 +49,38 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
     \"compression_model_name\": \"latte_v1\",
+    \"coarse\": false,
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.data.compressed_context' > /dev/null 2>&1; then
-    echo "   ✓ latte_v1 passed"
+    echo "   ✓ latte_v1 (token-level) passed"
     ((++PASSED))
 else
-    echo "   ✗ latte_v1 failed"
+    echo "   ✗ latte_v1 (token-level) failed"
+    echo "   Response: $RESPONSE"
+    ((++FAILED))
+fi
+echo ""
+
+# Test 3: latte_v1 (query specific, paragraph-level)
+echo "3. Testing latte_v1 (paragraph-level / coarse)..."
+RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $COMPRESR_API_KEY" \
+  -d "{
+    \"context\": \"$CONTEXT\",
+    \"query\": \"$QUERY\",
+    \"compression_model_name\": \"latte_v1\",
+    \"coarse\": true,
+    \"source\": \"sdk:curl\"
+  }")
+
+if echo "$RESPONSE" | jq -e '.data.compressed_context' > /dev/null 2>&1; then
+    echo "   ✓ latte_v1 (paragraph-level) passed"
+    ((++PASSED))
+else
+    echo "   ✗ latte_v1 (paragraph-level) failed"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi

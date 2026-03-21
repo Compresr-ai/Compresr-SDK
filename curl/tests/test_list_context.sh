@@ -64,7 +64,7 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -d '{
     "context": "Python was created by Guido van Rossum. Java was created by James Gosling.",
     "query": "Who created Python?",
-    "compression_model_name": "coldbrew_v1",
+    "compression_model_name": "latte_v1",
     "source": "sdk:curl"
   }')
 
@@ -78,7 +78,7 @@ else
 fi
 echo ""
 
-# Test 4: QS with list context
+# Test 4: QS with list context (latte_v1 returns string even with list input)
 echo "4. Testing QS compression with list context..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
@@ -86,15 +86,16 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -d '{
     "context": ["Python was created by Guido van Rossum in 1991.", "JavaScript was created by Brendan Eich.", "Java was developed by James Gosling."],
     "query": "Who created Python?",
-    "compression_model_name": "coldbrew_v1",
+    "compression_model_name": "latte_v1",
     "source": "sdk:curl"
   }')
 
-if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "array"' > /dev/null 2>&1; then
-    echo "   ✓ QS list context returns list (passed)"
+# latte_v1 returns a single string (concatenated) even when given list input
+if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "string"' > /dev/null 2>&1; then
+    echo "   ✓ QS list context returns string (passed)"
     ((++PASSED))
 else
-    echo "   ✗ QS list context should return list (failed)"
+    echo "   ✗ QS list context should return string (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
