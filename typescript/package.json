@@ -1,0 +1,83 @@
+{
+  "name": "compresr",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for Compresr - Intelligent context compression to reduce LLM API costs by 30-70%",
+  "author": "Compresr Team <founders@compresr.ai>",
+  "license": "Apache-2.0",
+  "homepage": "https://compresr.ai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/compresr/sdk.git",
+    "directory": "typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/compresr/sdk/issues"
+  },
+  "keywords": [
+    "llm",
+    "compression",
+    "ai",
+    "openai",
+    "gpt",
+    "tokens",
+    "cost-optimization",
+    "context-compression",
+    "rag",
+    "anthropic",
+    "claude"
+  ],
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run build:cjs:fixup",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:cjs:fixup": "echo '{\"type\": \"commonjs\"}' > dist/cjs/package.json",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "lint": "eslint src tests --ext .ts",
+    "lint:fix": "eslint src tests --ext .ts --fix",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build && npm run test"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^1.4.0",
+    "dotenv": "^16.4.0",
+    "eslint": "^8.57.0",
+    "msw": "^2.2.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  }
+}

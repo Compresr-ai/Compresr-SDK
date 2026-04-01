@@ -2,7 +2,9 @@
 
 
 [![PyPI](https://img.shields.io/pypi/v/compresr)](https://pypi.org/project/compresr/)
+[![npm](https://img.shields.io/npm/v/compresr)](https://www.npmjs.com/package/compresr)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.9-blue)](https://pypi.org/project/compresr/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-%3E%3D5.0-blue)](https://www.npmjs.com/package/compresr)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 Official SDKs for [Compresr](https://compresr.ai) - Intelligent context compression to reduce LLM API costs by 30-70%.
@@ -12,6 +14,7 @@ Official SDKs for [Compresr](https://compresr.ai) - Intelligent context compress
 | Language | Package | Documentation |
 |----------|---------|---------------|
 | Python | [![PyPI](https://img.shields.io/pypi/v/compresr)](https://pypi.org/project/compresr/) | [python/README.md](python/README.md) |
+| TypeScript | [![npm](https://img.shields.io/npm/v/compresr)](https://www.npmjs.com/package/compresr) | [typescript/README.md](typescript/README.md) |
 | curl/REST | - | [curl/README.md](curl/README.md) |
 
 ## Quick Start

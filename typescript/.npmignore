@@ -1,0 +1,21 @@
+# Source files (dist is published)
+src/
+tests/
+
+# Config files
+tsconfig.json
+tsconfig.cjs.json
+vitest.config.ts
+vitest.integration.config.ts
+.eslintrc.cjs
+.gitignore
+
+# Development
+.env
+.env.example
+coverage/
+node_modules/
+
+# Misc
+*.log
+.DS_Store
