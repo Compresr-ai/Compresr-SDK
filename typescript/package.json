@@ -1,5 +1,5 @@
 {
-  "name": "compresr",
+  "name": "@compresr/sdk",
   "version": "1.0.0",
   "description": "TypeScript SDK for Compresr - Intelligent context compression to reduce LLM API costs by 30-70%",
   "author": "Compresr Team <founders@compresr.ai>",
@@ -12,6 +12,9 @@
   },
   "bugs": {
     "url": "https://github.com/compresr/sdk/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "keywords": [
     "llm",

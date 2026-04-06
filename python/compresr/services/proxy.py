@@ -218,31 +218,32 @@ class HTTPClient:
             raise ImportError("Streaming requires httpx: pip install httpx")
 
         url = self._url(endpoint)
+        # Add Accept header for SSE
+        headers = {**self._headers, "Accept": "text/event-stream"}
+
         with httpx.Client(timeout=self._timeout) as client:
-            with client.stream("POST", url, json=data, headers=self._headers) as resp:
+            with client.stream("POST", url, json=data, headers=headers) as resp:
                 if resp.status_code >= 400:
                     try:
-                        err = (
-                            json.loads(resp.read())
-                            if resp.read()
-                            else {"error": f"HTTP {resp.status_code}"}
-                        )
+                        err = resp.json()
                     except Exception:
                         err = {"error": f"HTTP {resp.status_code}"}
                     self._handle_error(resp.status_code, err)
 
-                for line in resp.iter_text():
-                    for single in line.strip().split("\n"):
-                        if single.startswith("data: "):
-                            chunk = single[6:]
-                            if chunk == "[DONE]":
-                                return
-                            try:
-                                parsed = json.loads(chunk)
-                                if "content" in parsed:
-                                    yield parsed["content"]
-                            except json.JSONDecodeError:
-                                continue
+                # Use iter_lines() for proper SSE line-by-line parsing
+                for line in resp.iter_lines():
+                    if line.startswith("data: "):
+                        chunk = line[6:]
+                        if chunk == "[DONE]":
+                            return
+                        try:
+                            parsed = json.loads(chunk)
+                            if "content" in parsed:
+                                yield parsed["content"]
+                        except json.JSONDecodeError:
+                            # Yield raw content if not JSON
+                            if chunk:
+                                yield chunk
 
     # ==================== Async ====================
 

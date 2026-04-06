@@ -211,3 +211,6 @@ __marimo__/
 .secrets
 python/deploy_python_sdk.sh
 
+
+# macOS
+.DS_Store
