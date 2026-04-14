@@ -48,6 +48,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Print runner IP (for Cloudflare whitelist)
+        run: |
+          echo "=== GitHub Actions Runner IP ==="
+          curl -s https://api.ipify.org
+          echo ""
+          curl -s https://ifconfig.me
+          echo ""
+          echo "================================"
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

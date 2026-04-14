@@ -8,4 +8,17 @@ export {
   ServerError,
   ConnectionError,
   NotFoundError,
+  // Budget & Credits
+  InsufficientCreditsError,
+  BudgetLimitError,
+  DailyLimitError,
+  ApiKeyBudgetError,
+  // Model & Input
+  ModelNotFoundError,
+  ContextWindowExceededError,
+  ContentPolicyError,
+  // Service
+  TimeoutError,
+  ServiceUnavailableError,
+  TargetAuthenticationError,
 } from './exceptions.js';
