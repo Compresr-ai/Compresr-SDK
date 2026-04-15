@@ -31,6 +31,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Print runner IP (for Cloudflare whitelist)
+        run: |
+          echo "=== GitHub Actions Runner IP ==="
+          curl -s https://api.ipify.org
+          echo ""
+          curl -s https://ifconfig.me
+          echo ""
+          echo "================================"
+      
       - name: Setup test environment
         run: |
           echo "COMPRESR_API_KEY=${{ secrets.COMPRESR_API_KEY }}" > ../.env

@@ -169,3 +169,162 @@ class ConnectionError(CompresrError):
     ):
         super().__init__(message, response_data, "connection_error")
         self.service = service
+
+
+# =============================================================================
+# Budget & Credits Errors
+# =============================================================================
+
+
+class InsufficientCreditsError(CompresrError):
+    """User has insufficient credits to complete the request."""
+
+    def __init__(
+        self,
+        message: str = "Insufficient credits",
+        credits_required: Optional[float] = None,
+        credits_remaining: Optional[float] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "insufficient_credits")
+        self.credits_required = credits_required
+        self.credits_remaining = credits_remaining
+
+
+class BudgetLimitError(CompresrError):
+    """User's budget limit has been reached."""
+
+    def __init__(
+        self,
+        message: str = "Budget limit reached",
+        current_budget: Optional[float] = None,
+        budget_used: Optional[float] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "budget_limit_reached")
+        self.current_budget = current_budget
+        self.budget_used = budget_used
+
+
+class DailyLimitError(CompresrError):
+    """Daily request limit exceeded."""
+
+    def __init__(
+        self,
+        message: str = "Daily limit exceeded",
+        daily_limit: Optional[int] = None,
+        requests_used: Optional[int] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "daily_limit_exceeded")
+        self.daily_limit = daily_limit
+        self.requests_used = requests_used
+
+
+class ApiKeyBudgetError(CompresrError):
+    """Per-API-key budget limit exceeded."""
+
+    def __init__(
+        self,
+        message: str = "API key budget exceeded",
+        api_key_budget: Optional[float] = None,
+        api_key_used: Optional[float] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "api_key_budget_exceeded")
+        self.api_key_budget = api_key_budget
+        self.api_key_used = api_key_used
+
+
+# =============================================================================
+# Model & Input Errors
+# =============================================================================
+
+
+class ModelNotFoundError(CompresrError):
+    """Requested model does not exist."""
+
+    def __init__(
+        self,
+        message: str,
+        model_name: Optional[str] = None,
+        available_models: Optional[list] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "model_not_found")
+        self.model_name = model_name
+        self.available_models = available_models or []
+
+
+class ContextWindowExceededError(CompresrError):
+    """Input exceeds model's context window size."""
+
+    def __init__(
+        self,
+        message: str = "Context window exceeded",
+        max_tokens: Optional[int] = None,
+        actual_tokens: Optional[int] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "context_window_exceeded")
+        self.max_tokens = max_tokens
+        self.actual_tokens = actual_tokens
+
+
+class ContentPolicyError(CompresrError):
+    """Content violates provider's content policy."""
+
+    def __init__(
+        self,
+        message: str = "Content policy violation",
+        provider: Optional[str] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "content_policy_violation")
+        self.provider = provider
+
+
+# =============================================================================
+# Service Errors
+# =============================================================================
+
+
+class TimeoutError(CompresrError):
+    """Request timed out."""
+
+    def __init__(
+        self,
+        message: str = "Request timed out",
+        timeout_seconds: Optional[int] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "timeout")
+        self.timeout_seconds = timeout_seconds
+
+
+class ServiceUnavailableError(CompresrError):
+    """Service is temporarily unavailable."""
+
+    def __init__(
+        self,
+        message: str = "Service temporarily unavailable",
+        service: Optional[str] = None,
+        retry_after: Optional[int] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "service_unavailable")
+        self.service = service
+        self.retry_after = retry_after
+
+
+class TargetAuthenticationError(CompresrError):
+    """User's target LLM API key is invalid."""
+
+    def __init__(
+        self,
+        message: str = "Invalid target API key",
+        provider: Optional[str] = None,
+        response_data: Optional[dict] = None,
+    ):
+        super().__init__(message, response_data, "target_authentication_error")
+        self.provider = provider

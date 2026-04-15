@@ -10,6 +10,19 @@ import {
   ScopeError,
   ServerError,
   ValidationError,
+  // Budget & Credits
+  InsufficientCreditsError,
+  BudgetLimitError,
+  DailyLimitError,
+  ApiKeyBudgetError,
+  // Model & Input
+  ModelNotFoundError,
+  ContextWindowExceededError,
+  ContentPolicyError,
+  // Service
+  TimeoutError,
+  ServiceUnavailableError,
+  TargetAuthenticationError,
   type ErrorResponseData,
 } from '../errors/index.js';
 
@@ -22,6 +35,7 @@ export interface ErrorBody {
   message?: string;
   field?: string;
   retry_after?: number;
+  code?: string;
 }
 
 /**
@@ -80,13 +94,78 @@ function extractErrorMessage(body: ErrorBody): string {
 }
 
 /**
+ * Map error code from response body to appropriate error class
+ * Returns null if code is not recognized (fall through to status-based handling)
+ */
+function handleErrorByCode(code: string, msg: string, body: ErrorBody, normalized: Partial<ErrorResponseData>): CompresrError | null {
+  switch (code) {
+    // Budget & Credits
+    case 'insufficient_credits':
+      return new InsufficientCreditsError(msg, undefined, undefined, normalized);
+    case 'budget_limit_reached':
+      return new BudgetLimitError(msg, undefined, undefined, normalized);
+    case 'daily_limit_exceeded':
+      return new DailyLimitError(msg, undefined, undefined, normalized);
+    case 'api_key_budget_exceeded':
+      return new ApiKeyBudgetError(msg, undefined, undefined, normalized);
+    
+    // Model & Input
+    case 'model_not_found':
+      return new ModelNotFoundError(msg, undefined, undefined, normalized);
+    case 'context_window_exceeded':
+      return new ContextWindowExceededError(msg, undefined, undefined, normalized);
+    case 'content_policy_violation':
+      return new ContentPolicyError(msg, undefined, normalized);
+    
+    // Service
+    case 'timeout':
+      return new TimeoutError(msg, undefined, normalized);
+    case 'service_unavailable':
+      return new ServiceUnavailableError(msg, undefined, body.retry_after, normalized);
+    case 'target_authentication_error':
+      return new TargetAuthenticationError(msg, undefined, normalized);
+    
+    // Auth & Permissions
+    case 'authentication_error':
+      return new AuthenticationError(`Authentication failed: ${msg}`, normalized);
+    case 'scope_error':
+      return new ScopeError(msg, undefined, normalized);
+    
+    // Resource
+    case 'not_found':
+      return new NotFoundError(msg, undefined, normalized);
+    
+    // Validation
+    case 'validation_error':
+      return new ValidationError(msg, body.field, normalized);
+    
+    // Rate limiting
+    case 'rate_limit_exceeded':
+      return new RateLimitError(msg, body.retry_after, normalized);
+
+    default:
+      return null;
+  }
+}
+
+/**
  * Map HTTP status code and body to appropriate error class
+ * First checks error code in body, then falls back to HTTP status
  * @throws Always throws an appropriate CompresrError subclass
  */
 export function handleHttpError(status: number, body: ErrorBody): never {
   const msg = extractErrorMessage(body);
   const normalized = normalizeErrorBody(body);
 
+  // First, try to map by error code if present
+  if (body.code) {
+    const codeError = handleErrorByCode(body.code, msg, body, normalized);
+    if (codeError) {
+      throw codeError;
+    }
+  }
+
+  // Fall back to status-based error handling
   switch (status) {
     case STATUS_CODES.UNAUTHORIZED:
       throw new AuthenticationError(

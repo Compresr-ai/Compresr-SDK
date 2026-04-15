@@ -19,9 +19,26 @@ except ImportError:
     HTTPX_AVAILABLE = False
 
 from ..config import API_CONFIG, HEADERS, STATUS_CODES
-from ..exceptions import AuthenticationError, CompresrError
+from ..exceptions import (
+    ApiKeyBudgetError,
+    AuthenticationError,
+    BudgetLimitError,
+    CompresrError,
+)
 from ..exceptions import ConnectionError as CompresrConnectionError
-from ..exceptions import RateLimitError, ScopeError, ServerError, ValidationError
+from ..exceptions import (
+    ContentPolicyError,
+    ContextWindowExceededError,
+    DailyLimitError,
+    InsufficientCreditsError,
+    ModelNotFoundError,
+    RateLimitError,
+    ScopeError,
+    ServerError,
+    ServiceUnavailableError,
+    TargetAuthenticationError,
+    ValidationError,
+)
 
 
 class HTTPClient:
@@ -83,7 +100,74 @@ class HTTPClient:
     def _handle_error(self, status_code: int, body: Dict[str, Any]) -> NoReturn:
         """Handle error response with user-friendly messages."""
         msg = self._extract_error_message(body)
+        code = body.get("code", "")
 
+        # Check error code first for specific error types
+        if code == "insufficient_credits":
+            raise InsufficientCreditsError(
+                f"Insufficient credits: {msg}",
+                credits_required=body.get("credits_required"),
+                credits_remaining=body.get("credits_remaining"),
+                response_data=body,
+            )
+        elif code == "budget_limit_reached":
+            raise BudgetLimitError(
+                f"Budget limit reached: {msg}",
+                current_budget=body.get("current_budget"),
+                budget_used=body.get("budget_used"),
+                response_data=body,
+            )
+        elif code == "api_key_budget_exceeded":
+            raise ApiKeyBudgetError(
+                f"API key budget exceeded: {msg}",
+                api_key_budget=body.get("api_key_budget"),
+                api_key_used=body.get("api_key_used"),
+                response_data=body,
+            )
+        elif code == "daily_limit_exceeded":
+            raise DailyLimitError(
+                f"Daily limit exceeded: {msg}",
+                daily_limit=body.get("daily_limit"),
+                requests_used=body.get("requests_used"),
+                response_data=body,
+            )
+        elif code == "model_not_found":
+            raise ModelNotFoundError(
+                f"Model not found: {msg}",
+                model_name=body.get("model_name"),
+                available_models=body.get(
+                    "available_models", body.get("details", {}).get("available_models")
+                ),
+                response_data=body,
+            )
+        elif code == "context_window_exceeded":
+            raise ContextWindowExceededError(
+                f"Context window exceeded: {msg}",
+                max_tokens=body.get("max_tokens"),
+                actual_tokens=body.get("actual_tokens"),
+                response_data=body,
+            )
+        elif code == "content_policy_violation":
+            raise ContentPolicyError(
+                f"Content policy violation: {msg}",
+                provider=body.get("provider"),
+                response_data=body,
+            )
+        elif code == "target_authentication_error":
+            raise TargetAuthenticationError(
+                f"Target API key invalid: {msg}",
+                provider=body.get("provider"),
+                response_data=body,
+            )
+        elif code == "service_unavailable":
+            raise ServiceUnavailableError(
+                f"Service unavailable: {msg}",
+                service=body.get("service"),
+                retry_after=body.get("retry_after"),
+                response_data=body,
+            )
+
+        # Fall back to HTTP status code handling
         if status_code == STATUS_CODES.UNAUTHORIZED:
             raise AuthenticationError(
                 f"Authentication failed: {msg}. Check your API key is valid.", response_data=body
@@ -106,6 +190,17 @@ class HTTPClient:
             raise RateLimitError(
                 f"Rate limit exceeded: {msg}.{retry_msg}",
                 retry_after=retry if isinstance(retry, int) else None,
+                response_data=body,
+            )
+        elif status_code == 402:  # Payment Required
+            raise InsufficientCreditsError(
+                f"Payment required: {msg}",
+                response_data=body,
+            )
+        elif status_code == 503:  # Service Unavailable
+            raise ServiceUnavailableError(
+                f"Service temporarily unavailable: {msg}",
+                retry_after=body.get("retry_after"),
                 response_data=body,
             )
         elif status_code >= 500:
