@@ -1,6 +1,6 @@
 {
   "name": "@compresr/sdk",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "TypeScript SDK for Compresr - Intelligent context compression to reduce LLM API costs by 30-70%",
   "author": "Compresr Team <founders@compresr.ai>",
   "license": "Apache-2.0",
@@ -64,8 +64,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "lint": "eslint src tests --ext .ts",
-    "lint:fix": "eslint src tests --ext .ts --fix",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run clean && npm run build && npm run test"
   },

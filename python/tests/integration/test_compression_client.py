@@ -317,20 +317,24 @@ class TestBatchCompression:
 
         assert "must match" in str(exc_info.value).lower()
 
-    def test_batch_invalid_model_raises_error(self, admin_client):
-        """Test that non-query models raise ValidationError for batch."""
-        from compresr.exceptions import ValidationError
+    def test_batch_invalid_model_error_from_backend(self, admin_client):
+        """Test that non-query models return error from backend for QS batch."""
+        from compresr.exceptions import CompresrError
 
         contexts = ["Context 1", "Context 2"]
 
-        with pytest.raises(ValidationError) as exc_info:
+        # SDK no longer validates models - backend returns the error
+        # Backend may return different error types, so we accept any error
+        with pytest.raises(CompresrError) as exc_info:
             admin_client.compress_batch(
                 contexts=contexts,
                 queries="test query",
-                compression_model_name="espresso_v1",  # Not supported for batch
+                compression_model_name="espresso_v1",  # Not supported for QS
             )
 
-        assert "query-specific" in str(exc_info.value).lower()
+        # Backend returns "RouteGroup.QUESTION_SPECIFIC" in error message
+        error_msg = str(exc_info.value).lower()
+        assert "question" in error_msg or "specific" in error_msg or "model" in error_msg
 
 
 class TestCompressionRatio:

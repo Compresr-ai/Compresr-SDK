@@ -1,5 +1,7 @@
 #!/bin/bash
-# Test list context support (context can be str or List[str])
+# Test single vs batch endpoint separation
+# - Single endpoints: context: str only
+# - Batch endpoints: inputs: List[{context}] format
 
 set -e
 
@@ -10,12 +12,12 @@ FAILED=0
 PASSED=0
 
 echo "========================================="
-echo "Testing List Context Support"
+echo "Testing Single vs Batch Endpoint Separation"
 echo "========================================="
 echo ""
 
-# Test 1: Agnostic with string context
-echo "1. Testing agnostic compression with string context..."
+# Test 1: Agnostic single endpoint with string context
+echo "1. Testing agnostic single endpoint (string context)..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
@@ -26,38 +28,42 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
   }')
 
 if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "string"' > /dev/null 2>&1; then
-    echo "   ✓ String context returns string (passed)"
+    echo "   ✓ Single agnostic returns string (passed)"
     ((++PASSED))
 else
-    echo "   ✗ String context should return string (failed)"
+    echo "   ✗ Single agnostic should return string (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 2: Agnostic with list context
-echo "2. Testing agnostic compression with list context..."
-RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
+# Test 2: Agnostic batch endpoint
+echo "2. Testing agnostic batch endpoint..."
+RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/batch" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
-    "context": ["Machine learning enables data-driven decisions.", "Deep learning uses neural networks.", "NLP processes human language."],
+    "inputs": [
+      {"context": "Machine learning enables data-driven decisions."},
+      {"context": "Deep learning uses neural networks."},
+      {"context": "NLP processes human language."}
+    ],
     "compression_model_name": "espresso_v1",
     "source": "sdk:curl"
   }')
 
-if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "array"' > /dev/null 2>&1; then
-    echo "   ✓ List context returns list (passed)"
+if echo "$RESPONSE" | jq -e '.data.results | length == 3' > /dev/null 2>&1; then
+    echo "   ✓ Batch agnostic returns 3 results (passed)"
     ((++PASSED))
 else
-    echo "   ✗ List context should return list (failed)"
+    echo "   ✗ Batch agnostic should return 3 results (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 3: QS with string context
-echo "3. Testing QS compression with string context..."
+# Test 3: QS single endpoint with string context
+echo "3. Testing QS single endpoint (string context + query)..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
@@ -69,33 +75,35 @@ RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   }')
 
 if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "string"' > /dev/null 2>&1; then
-    echo "   ✓ QS string context returns string (passed)"
+    echo "   ✓ Single QS returns string (passed)"
     ((++PASSED))
 else
-    echo "   ✗ QS string context should return string (failed)"
+    echo "   ✗ Single QS should return string (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 4: QS with list context (latte_v1 returns string even with list input)
-echo "4. Testing QS compression with list context..."
-RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
+# Test 4: QS batch endpoint
+echo "4. Testing QS batch endpoint..."
+RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/batch" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d '{
-    "context": ["Python was created by Guido van Rossum in 1991.", "JavaScript was created by Brendan Eich.", "Java was developed by James Gosling."],
-    "query": "Who created Python?",
+    "inputs": [
+      {"context": "Python was created by Guido van Rossum in 1991.", "query": "Who created Python?"},
+      {"context": "JavaScript was created by Brendan Eich.", "query": "Who created JavaScript?"},
+      {"context": "Java was developed by James Gosling.", "query": "Who created Java?"}
+    ],
     "compression_model_name": "latte_v1",
     "source": "sdk:curl"
   }')
 
-# latte_v1 returns a single string (concatenated) even when given list input
-if echo "$RESPONSE" | jq -e '.data.compressed_context | type == "string"' > /dev/null 2>&1; then
-    echo "   ✓ QS list context returns string (passed)"
+if echo "$RESPONSE" | jq -e '.data.results | length == 3' > /dev/null 2>&1; then
+    echo "   ✓ Batch QS returns 3 results (passed)"
     ((++PASSED))
 else
-    echo "   ✗ QS list context should return string (failed)"
+    echo "   ✗ Batch QS should return 3 results (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
@@ -109,5 +117,5 @@ if [ $FAILED -gt 0 ]; then
     exit 1
 fi
 
-echo "✓ All list context tests passed!"
+echo "✓ All single/batch separation tests passed!"
 exit 0

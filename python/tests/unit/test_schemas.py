@@ -356,17 +356,16 @@ class TestCompressBatchResponse:
 # =============================================================================
 
 
-class TestUnionTypeHandling:
-    """Test Union[str, List[str]] type handling in schemas."""
+class TestContextTypeHandling:
+    """Test context type handling in schemas (context is now str only)."""
 
-    def test_compress_request_with_list_context(self):
-        """Test CompressRequest accepts list of strings."""
-        req = CompressRequest(
-            context=["Context 1", "Context 2", "Context 3"],
-            compression_model_name="espresso_v1",
-        )
-        assert isinstance(req.context, list)
-        assert len(req.context) == 3
+    def test_compress_request_rejects_list_context(self):
+        """Test CompressRequest rejects list of strings (use batch endpoint)."""
+        with pytest.raises(ValidationError):
+            CompressRequest(
+                context=["Context 1", "Context 2", "Context 3"],  # type: ignore[arg-type]
+                compression_model_name="espresso_v1",
+            )
 
     def test_compress_request_single_string(self):
         """Test CompressRequest with single string context."""
@@ -375,20 +374,6 @@ class TestUnionTypeHandling:
             compression_model_name="espresso_v1",
         )
         assert isinstance(req.context, str)
-
-    def test_compress_result_with_list_compressed_context(self):
-        """Test CompressResult with list compressed_context."""
-        result = CompressResult(
-            original_context=["A", "B"],
-            compressed_context=["A compressed", "B compressed"],
-            original_tokens=100,
-            compressed_tokens=50,
-            actual_compression_ratio=0.5,
-            tokens_saved=50,
-            duration_ms=100,
-        )
-        assert isinstance(result.compressed_context, list)
-        assert len(result.compressed_context) == 2
 
     def test_compress_result_string_compressed_context(self):
         """Test CompressResult with string compressed_context."""

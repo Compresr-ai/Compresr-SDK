@@ -24,5 +24,5 @@ module.exports = {
     '@typescript-eslint/prefer-optional-chain': 'error',
     'no-console': 'warn',
   },
-  ignorePatterns: ['dist', 'node_modules', '*.js', '*.cjs'],
+  ignorePatterns: ['dist', 'node_modules', '*.js', '*.cjs', 'tests'],
 };

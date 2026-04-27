@@ -36,33 +36,27 @@ export type CompressionModel = typeof MODELS.ESPRESSO | typeof MODELS.LATTE;
 export type SearchModel = typeof MODELS.MACCHIATO;
 export type Model = (typeof MODELS)[keyof typeof MODELS];
 
-/** Models allowed for CompressionClient */
 export const ALLOWED_COMPRESSION_MODELS: ReadonlySet<string> = new Set([
   MODELS.ESPRESSO,
   MODELS.LATTE,
 ]);
 
-/** Models allowed for SearchClient */
 export const ALLOWED_SEARCH_MODELS: ReadonlySet<string> = new Set([
   MODELS.MACCHIATO,
 ]);
 
-/** Models that require a query parameter */
 export const QUERY_REQUIRED_MODELS: ReadonlySet<string> = new Set([
   MODELS.LATTE,
 ]);
 
-/** Models that support coarse parameter */
 export const COARSE_SUPPORTED_MODELS: ReadonlySet<string> = new Set([
   MODELS.LATTE,
 ]);
 
-/** Models that use the agnostic endpoint */
 export const AGNOSTIC_ENDPOINT_MODELS: ReadonlySet<string> = new Set([
   MODELS.ESPRESSO,
 ]);
 
-/** Models that use the query-specific endpoint */
 export const QS_ENDPOINT_MODELS: ReadonlySet<string> = new Set([
   MODELS.LATTE,
 ]);
