@@ -19,7 +19,7 @@ describe('CompressionClient Integration', () => {
     client = new CompressionClient({ apiKey: TEST_API_KEY });
   });
 
-  describe('compress with espresso_v1', () => {
+  describe('compress with espresso_v1 (agnostic)', () => {
     it.skipIf(skipIfNoApiKey())(
       'should compress context without query',
       async () => {
@@ -41,23 +41,6 @@ describe('CompressionClient Integration', () => {
     );
 
     it.skipIf(skipIfNoApiKey())(
-      'should compress array of contexts',
-      async () => {
-        const result: CompressResponse = await client.compress({
-          context: [
-            'Machine learning enables computers to learn from data.',
-            'Deep learning uses neural networks with many layers.',
-          ],
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(Array.isArray(result.data!.compressed_context)).toBe(true);
-        expect((result.data!.compressed_context as string[]).length).toBe(2);
-      }
-    );
-
-    it.skipIf(skipIfNoApiKey())(
       'should respect compression ratio',
       async () => {
         const result: CompressResponse = await client.compress({
@@ -74,7 +57,7 @@ describe('CompressionClient Integration', () => {
     );
   });
 
-  describe('compress with latte_v1', () => {
+  describe('compress with latte_v1 (query-specific)', () => {
     it.skipIf(skipIfNoApiKey())(
       'should compress context with query',
       async () => {
@@ -112,9 +95,31 @@ describe('CompressionClient Integration', () => {
     );
   });
 
-  describe('compressBatch', () => {
+  describe('compressBatch - agnostic (no queries)', () => {
     it.skipIf(skipIfNoApiKey())(
-      'should batch compress with same query',
+      'should batch compress multiple contexts without queries',
+      async () => {
+        const result: CompressBatchResponse = await client.compressBatch({
+          contexts: [
+            'Machine learning enables computers to learn from data.',
+            'Deep learning uses neural networks with many layers.',
+            'Natural language processing helps computers understand text.',
+          ],
+          // No queries = agnostic batch endpoint
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.data).not.toBeNull();
+        expect(result.data!.results.length).toBe(3);
+        expect(result.data!.count).toBe(3);
+        expect(result.data!.total_tokens_saved).toBeGreaterThanOrEqual(0);
+      }
+    );
+  });
+
+  describe('compressBatch - query-specific', () => {
+    it.skipIf(skipIfNoApiKey())(
+      'should batch compress with same query for all',
       async () => {
         const result: CompressBatchResponse = await client.compressBatch({
           contexts: [
@@ -123,6 +128,7 @@ describe('CompressionClient Integration', () => {
             'Document about natural language processing.',
           ],
           queries: 'What are the key concepts?',
+          compressionModelName: 'latte_v1',
         });
 
         expect(result.success).toBe(true);
@@ -142,6 +148,26 @@ describe('CompressionClient Integration', () => {
             'Neural networks have multiple layers.',
           ],
           queries: ['What is ML?', 'What are neural networks?'],
+          compressionModelName: 'latte_v1',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.data).not.toBeNull();
+        expect(result.data!.results.length).toBe(2);
+      }
+    );
+
+    it.skipIf(skipIfNoApiKey())(
+      'should batch compress with coarse mode',
+      async () => {
+        const result: CompressBatchResponse = await client.compressBatch({
+          contexts: [
+            'Machine learning is revolutionizing many industries.',
+            'Deep learning powers modern AI applications.',
+          ],
+          queries: 'What are the applications?',
+          compressionModelName: 'latte_v1',
+          coarse: true,
         });
 
         expect(result.success).toBe(true);
@@ -173,6 +199,32 @@ describe('CompressionClient Integration', () => {
         expect(chunks.length).toBeGreaterThan(0);
         const fullContent = chunks.join('');
         expect(fullContent.length).toBeGreaterThan(0);
+      }
+    );
+  });
+
+  describe('error handling', () => {
+    it.skipIf(skipIfNoApiKey())(
+      'should throw ValidationError for empty context',
+      async () => {
+        await expect(
+          client.compress({
+            context: '',
+          })
+        ).rejects.toThrow();
+      }
+    );
+
+    it.skipIf(skipIfNoApiKey())(
+      'should handle backend error for invalid model gracefully',
+      async () => {
+        // Invalid model should return error from backend
+        await expect(
+          client.compress({
+            context: 'Test context',
+            compressionModelName: 'invalid_model_xyz',
+          })
+        ).rejects.toThrow();
       }
     );
   });

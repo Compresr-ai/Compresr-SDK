@@ -43,10 +43,17 @@ Quick Start - Agentic Search:
     print(response.data.chunks)  # List[str]
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from .clients import CompressionClient, SearchClient
 from .config import MODELS
 
-__version__ = "2.1.0"
+try:
+    __version__ = version("compresr")
+except PackageNotFoundError:
+    # Package not installed (e.g., running from source)
+    __version__ = "0.0.0-dev"
+
 __all__ = [
     "CompressionClient",
     "SearchClient",
