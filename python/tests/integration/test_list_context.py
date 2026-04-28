@@ -1,8 +1,8 @@
 """
-Integration Tests for List Context Support
+Integration Tests for Batch Compression
 
-Tests for context: Union[str, List[str]] support in CompressionClient.
-Output type matches input type.
+Tests for compress_batch() functionality in CompressionClient.
+List context is no longer supported for single compression - use batch instead.
 
 Run with:
     pytest tests/integration/test_list_context.py -v
@@ -11,6 +11,7 @@ Run with:
 import pytest
 
 from compresr import CompressionClient
+from compresr.exceptions import ValidationError
 
 DEFAULT_COMPRESSION_MODEL = "espresso_v1"
 LATTE_MODEL = "latte_v1"
@@ -30,12 +31,12 @@ def compression_client(admin_api_key):
 
 
 # =============================================================================
-# CompressionClient - List Context Tests (espresso_v1)
+# CompressionClient - Single Compression (context is str only)
 # =============================================================================
 
 
-class TestEspressoListContext:
-    """Tests for CompressionClient with List[str] context using espresso_v1."""
+class TestSingleCompression:
+    """Tests for single string compression."""
 
     def test_single_string_returns_string(self, compression_client):
         """Test that single string context returns string compressed_context."""
@@ -47,84 +48,83 @@ class TestEspressoListContext:
         assert response.success is True
         assert isinstance(response.data.compressed_context, str)
 
-    def test_list_context_returns_list(self, compression_client):
-        """Test that list context returns list compressed_context."""
+    def test_list_context_raises_validation_error(self, compression_client):
+        """Test that list context raises ValidationError (use batch instead)."""
+        with pytest.raises(ValidationError):
+            compression_client.compress(
+                context=["Context 1", "Context 2"],  # type: ignore[arg-type]
+                compression_model_name=DEFAULT_COMPRESSION_MODEL,
+            )
+
+
+# =============================================================================
+# CompressionClient - Batch Compression Tests (espresso_v1)
+# =============================================================================
+
+
+class TestEspressoBatchCompression:
+    """Tests for CompressionClient batch compression using espresso_v1."""
+
+    def test_batch_compression(self, compression_client):
+        """Test batch compression with multiple contexts."""
         contexts = [
             "Machine learning is a subset of artificial intelligence.",
             "Deep learning uses neural networks with many layers.",
             "Natural language processing deals with text analysis.",
         ]
 
-        response = compression_client.compress(
-            context=contexts,
+        response = compression_client.compress_batch(
+            contexts=contexts,
             compression_model_name=DEFAULT_COMPRESSION_MODEL,
         )
 
         assert response.success is True
-        assert isinstance(response.data.compressed_context, list)
-        assert len(response.data.compressed_context) == len(contexts)
+        assert len(response.data.results) == len(contexts)
 
-    def test_list_context_preserves_order(self, compression_client):
-        """Test that list compression preserves the order of contexts."""
+    def test_batch_preserves_order(self, compression_client):
+        """Test that batch compression preserves the order of contexts."""
         contexts = [
             "First topic about machine learning.",
             "Second topic about data science.",
             "Third topic about neural networks.",
         ]
 
-        response = compression_client.compress(
-            context=contexts,
+        response = compression_client.compress_batch(
+            contexts=contexts,
             compression_model_name=DEFAULT_COMPRESSION_MODEL,
         )
 
         assert response.success is True
-        for i, compressed in enumerate(response.data.compressed_context):
-            assert len(compressed) > 0
+        for i, result in enumerate(response.data.results):
+            assert len(result.compressed_context) > 0
 
     @pytest.mark.asyncio
-    async def test_async_list_context(self, compression_client):
-        """Test async compression with list context."""
+    async def test_async_batch_compression(self, compression_client):
+        """Test async batch compression."""
         contexts = [
             "Artificial intelligence is transforming industries.",
             "Machine learning enables predictive analytics.",
         ]
 
-        response = await compression_client.compress_async(
-            context=contexts,
+        response = await compression_client.compress_batch_async(
+            contexts=contexts,
             compression_model_name=DEFAULT_COMPRESSION_MODEL,
         )
 
         assert response.success is True
-        assert isinstance(response.data.compressed_context, list)
-        assert len(response.data.compressed_context) == len(contexts)
+        assert len(response.data.results) == len(contexts)
 
 
 # =============================================================================
-# CompressionClient - List Context Tests (latte_v1)
+# CompressionClient - Batch Compression Tests (latte_v1)
 # =============================================================================
 
 
-class TestLatteListContext:
-    """Tests for CompressionClient with List[str] context using latte_v1."""
+class TestLatteBatchCompression:
+    """Tests for CompressionClient batch compression using latte_v1."""
 
-    def test_single_string_returns_string(self, compression_client):
-        """Test that single string context returns string compressed_context."""
-        response = compression_client.compress(
-            context="Machine learning is a field of AI that enables learning from data.",
-            query="What is machine learning?",
-            compression_model_name=LATTE_MODEL,
-        )
-
-        assert response.success is True
-        assert isinstance(response.data.compressed_context, str)
-
-    def test_list_context_returns_string(self, compression_client):
-        """Test that list context returns string compressed_context for latte_v1.
-
-        Note: latte_v1 always returns a single string (concatenated) regardless
-        of whether the input is a list or string. This is different from espresso_v1
-        which preserves the input type.
-        """
+    def test_batch_with_same_query(self, compression_client):
+        """Test batch compression with same query for all contexts."""
         contexts = [
             "Machine learning uses algorithms to find patterns in data.",
             "Deep learning is inspired by biological neural networks.",
@@ -132,55 +132,54 @@ class TestLatteListContext:
         ]
         query = "What is machine learning?"
 
-        response = compression_client.compress(
-            context=contexts,
-            query=query,
+        response = compression_client.compress_batch(
+            contexts=contexts,
+            queries=query,  # Same query for all
             compression_model_name=LATTE_MODEL,
         )
 
         assert response.success is True
-        # latte_v1 returns string even for list input
-        assert isinstance(response.data.compressed_context, str)
+        assert len(response.data.results) == len(contexts)
 
-    def test_list_context_with_same_query(self, compression_client):
-        """Test that all contexts are filtered using the same query."""
+    def test_batch_with_different_queries(self, compression_client):
+        """Test batch compression with different queries per context."""
         contexts = [
             "Python was created by Guido van Rossum in 1991.",
             "JavaScript was created by Brendan Eich in 1995.",
             "Java was developed by James Gosling at Sun Microsystems.",
         ]
-        query = "Who created Python?"
+        queries = [
+            "Who created Python?",
+            "Who created JavaScript?",
+            "Who created Java?",
+        ]
 
-        response = compression_client.compress(
-            context=contexts,
-            query=query,
+        response = compression_client.compress_batch(
+            contexts=contexts,
+            queries=queries,
             compression_model_name=LATTE_MODEL,
         )
 
         assert response.success is True
-        assert len(response.data.compressed_context[0]) > 0
+        assert len(response.data.results) == len(contexts)
 
     @pytest.mark.asyncio
-    async def test_async_list_context(self, compression_client):
-        """Test async compression with list context.
-
-        Note: latte_v1 returns string even for list input.
-        """
+    async def test_async_batch_with_queries(self, compression_client):
+        """Test async batch compression with queries."""
         contexts = [
             "Einstein developed the theory of relativity.",
             "Newton formulated the laws of motion.",
         ]
         query = "What did Einstein discover?"
 
-        response = await compression_client.compress_async(
-            context=contexts,
-            query=query,
+        response = await compression_client.compress_batch_async(
+            contexts=contexts,
+            queries=query,
             compression_model_name=LATTE_MODEL,
         )
 
         assert response.success is True
-        # latte_v1 returns string even for list input
-        assert isinstance(response.data.compressed_context, str)
+        assert len(response.data.results) == len(contexts)
 
 
 # =============================================================================
@@ -188,35 +187,34 @@ class TestLatteListContext:
 # =============================================================================
 
 
-class TestListContextEdgeCases:
-    """Edge case tests for list context."""
+class TestBatchEdgeCases:
+    """Edge case tests for batch compression."""
 
-    def test_single_item_list(self, compression_client):
-        """Test list with single item."""
-        response = compression_client.compress(
-            context=["Only one context item here."],
+    def test_single_item_batch(self, compression_client):
+        """Test batch with single item."""
+        response = compression_client.compress_batch(
+            contexts=["Only one context item here."],
             compression_model_name=DEFAULT_COMPRESSION_MODEL,
         )
 
         assert response.success is True
-        assert isinstance(response.data.compressed_context, list)
-        assert len(response.data.compressed_context) == 1
+        assert len(response.data.results) == 1
 
     def test_mixed_length_contexts(self, compression_client):
-        """Test list with varying context lengths."""
+        """Test batch with varying context lengths."""
         contexts = [
             "Short.",
             "Medium length context with more words.",
             "A much longer context that has significantly more content to compress. " * 5,
         ]
 
-        response = compression_client.compress(
-            context=contexts,
+        response = compression_client.compress_batch(
+            contexts=contexts,
             compression_model_name=DEFAULT_COMPRESSION_MODEL,
         )
 
         assert response.success is True
-        assert len(response.data.compressed_context) == 3
+        assert len(response.data.results) == 3
 
 
 if __name__ == "__main__":

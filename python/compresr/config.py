@@ -32,6 +32,7 @@ class Endpoints:
     # Agnostic compression (no query required)
     COMPRESS_AGNOSTIC: str = "/api/compress/question-agnostic/"
     COMPRESS_AGNOSTIC_STREAM: str = "/api/compress/question-agnostic/stream"
+    COMPRESS_AGNOSTIC_BATCH: str = "/api/compress/question-agnostic/batch"
 
     # Query-specific compression (query required)
     COMPRESS_QS: str = "/api/compress/question-specific/"
@@ -113,17 +114,10 @@ class Models:
     DEFAULT: str = "espresso_v1"
 
 
-# Allowed models per client type
 ALLOWED_COMPRESSION_MODELS = frozenset({"espresso_v1", "latte_v1"})
 ALLOWED_SEARCH_MODELS = frozenset({"macchiato_v1"})
-
-# Models that require a query parameter
 QUERY_REQUIRED_MODELS = frozenset({"latte_v1"})
-
-# Models that support coarse parameter
 COARSE_SUPPORTED_MODELS = frozenset({"latte_v1"})
-
-# Endpoint routing
 AGNOSTIC_ENDPOINT_MODELS = frozenset({"espresso_v1"})
 QS_ENDPOINT_MODELS = frozenset({"latte_v1"})
 

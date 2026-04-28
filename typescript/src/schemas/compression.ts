@@ -11,13 +11,11 @@ import { BaseResponseSchema } from './common.js';
 // =============================================================================
 
 /**
- * Compress request schema
+ * Compress request schema (single context only)
+ * For multiple contexts, use the /batch endpoint.
  */
 export const CompressRequestSchema = z.object({
-  context: z.union([
-    z.string().min(1, 'context must not be empty'),
-    z.array(z.string().min(1, 'context item must not be empty')).min(1, 'context list must not be empty'),
-  ]),
+  context: z.string().min(1, 'context must not be empty'),
   compression_model_name: z.string(),
   query: z.string().min(1, 'query must not be empty').optional(),
   target_compression_ratio: z.number().nonnegative().optional(),
@@ -28,7 +26,28 @@ export const CompressRequestSchema = z.object({
 export type CompressRequest = z.infer<typeof CompressRequestSchema>;
 
 /**
- * Batch compression input (single item)
+ * Agnostic batch input (no query required)
+ */
+export const AgnosticBatchInputSchema = z.object({
+  context: z.string().min(1, 'context must not be empty'),
+});
+
+export type AgnosticBatchInput = z.infer<typeof AgnosticBatchInputSchema>;
+
+/**
+ * Agnostic batch compression request
+ */
+export const AgnosticBatchRequestSchema = z.object({
+  inputs: z.array(AgnosticBatchInputSchema).min(1).max(100),
+  compression_model_name: z.string(),
+  target_compression_ratio: z.number().nonnegative().optional(),
+  source: z.string().default('sdk:typescript'),
+});
+
+export type AgnosticBatchRequest = z.infer<typeof AgnosticBatchRequestSchema>;
+
+/**
+ * Query-specific batch compression input (query required)
  */
 export const CompressBatchInputSchema = z.object({
   context: z.string().min(1, 'context must not be empty'),
@@ -58,8 +77,8 @@ export type CompressBatchRequest = z.infer<typeof CompressBatchRequestSchema>;
  * Single compression result
  */
 export const CompressResultSchema = z.object({
-  original_context: z.union([z.string(), z.array(z.string())]),
-  compressed_context: z.union([z.string(), z.array(z.string())]),
+  original_context: z.string(),
+  compressed_context: z.string(),
   original_tokens: z.number(),
   compressed_tokens: z.number(),
   actual_compression_ratio: z.number(),

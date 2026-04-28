@@ -108,53 +108,86 @@ describe('CompressionClient', () => {
       expect(body.query).toBe('What is this?');
     });
 
-    it('should throw ValidationError when latte_v1 used without query', async () => {
+    // Note: Model validation is now done by backend, not SDK
+    // These tests verify that requests are sent (backend will return appropriate errors)
+
+    it('should send latte_v1 request even without query (backend validates)', async () => {
       const client = new CompressionClient({ apiKey: 'cmp_test_key' });
+
+      // Mock a 400 error response from backend
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: async () => ({
+          success: false,
+          message: "latte_v1 requires a 'query' parameter",
+        }),
+      });
 
       await expect(
         client.compress({
           context: 'Hello world',
           compressionModelName: 'latte_v1',
         })
-      ).rejects.toThrow(ValidationError);
+      ).rejects.toThrow(); // Backend will error
 
-      await expect(
-        client.compress({
-          context: 'Hello world',
-          compressionModelName: 'latte_v1',
-        })
-      ).rejects.toThrow(/requires a 'query' parameter/);
+      // Verify request was sent
+      expect(mockFetch).toHaveBeenCalled();
     });
 
-    it('should throw ValidationError when espresso_v1 used with query', async () => {
+    it('should send espresso_v1 request with query (backend decides behavior)', async () => {
       const client = new CompressionClient({ apiKey: 'cmp_test_key' });
 
-      await expect(
-        client.compress({
-          context: 'Hello world',
-          query: 'What is this?',
-          compressionModelName: 'espresso_v1',
-        })
-      ).rejects.toThrow(ValidationError);
+      // With query provided, SDK routes to query-specific endpoint
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            original_context: 'Hello world',
+            compressed_context: 'Hello',
+            original_tokens: 5,
+            compressed_tokens: 2,
+            actual_compression_ratio: 0.4,
+            tokens_saved: 3,
+            duration_ms: 50,
+          },
+        }),
+      });
 
-      await expect(
-        client.compress({
-          context: 'Hello world',
-          query: 'What is this?',
-          compressionModelName: 'espresso_v1',
-        })
-      ).rejects.toThrow(/does not accept a 'query' parameter/);
+      await client.compress({
+        context: 'Hello world',
+        query: 'What is this?',
+        compressionModelName: 'espresso_v1',
+      });
+
+      // Request sent to query-specific endpoint since query is provided
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('/api/compress/question-specific/');
     });
 
-    it('should throw ValidationError for invalid model', async () => {
+    it('should send invalid model request (backend validates)', async () => {
       const client = new CompressionClient({ apiKey: 'cmp_test_key' });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: async () => ({
+          success: false,
+          message: "Unknown model: 'invalid_model'",
+        }),
+      });
 
       await expect(
         client.compress({
           context: 'Hello world',
           compressionModelName: 'invalid_model',
         })
-      ).rejects.toThrow(ValidationError);
+      ).rejects.toThrow();
+
+      expect(mockFetch).toHaveBeenCalled();
     });
 
     it('should include compression ratio in request', async () => {
@@ -215,30 +248,15 @@ describe('CompressionClient', () => {
       expect(body.coarse).toBe(true);
     });
 
-    it('should handle array context', async () => {
+    it('should reject array context (use compressBatch for multiple)', async () => {
       const client = new CompressionClient({ apiKey: 'cmp_test_key' });
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          success: true,
-          data: {
-            original_context: ['Doc 1', 'Doc 2'],
-            compressed_context: ['D1', 'D2'],
-            original_tokens: 20,
-            compressed_tokens: 10,
-            actual_compression_ratio: 0.5,
-            tokens_saved: 10,
-            duration_ms: 100,
-          },
-        }),
-      });
-
-      const result = await client.compress({
-        context: ['Doc 1', 'Doc 2'],
-      });
-
-      expect(result.data?.compressed_context).toEqual(['D1', 'D2']);
+      // Array context is no longer supported - use compressBatch instead
+      await expect(
+        client.compress({
+          context: ['Doc 1', 'Doc 2'] as unknown as string,
+        })
+      ).rejects.toThrow(ValidationError);
     });
   });
 
@@ -343,24 +361,45 @@ describe('CompressionClient', () => {
       ).rejects.toThrow(/must match number of contexts/);
     });
 
-    it('should throw ValidationError for non-query model in batch', async () => {
+    it('should route batch with queries to QS endpoint (backend validates model)', async () => {
       const client = new CompressionClient({ apiKey: 'cmp_test_key' });
 
-      await expect(
-        client.compressBatch({
-          contexts: ['Doc 1'],
-          queries: 'Q1',
-          compressionModelName: 'espresso_v1',
-        })
-      ).rejects.toThrow(ValidationError);
+      // SDK routes based on queries presence, not model name
+      // Backend will validate model compatibility
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            results: [
+              {
+                original_context: 'Doc 1',
+                compressed_context: 'D1',
+                original_tokens: 10,
+                compressed_tokens: 5,
+                actual_compression_ratio: 0.5,
+                tokens_saved: 5,
+                duration_ms: 50,
+              },
+            ],
+            total_original_tokens: 10,
+            total_compressed_tokens: 5,
+            total_tokens_saved: 5,
+            average_compression_ratio: 0.5,
+            count: 1,
+          },
+        }),
+      });
 
-      await expect(
-        client.compressBatch({
-          contexts: ['Doc 1'],
-          queries: 'Q1',
-          compressionModelName: 'espresso_v1',
-        })
-      ).rejects.toThrow(/only supports query-specific models/);
+      await client.compressBatch({
+        contexts: ['Doc 1'],
+        queries: 'Q1',
+        compressionModelName: 'espresso_v1', // Backend will handle this
+      });
+
+      // Verify QS batch endpoint was called since queries provided
+      const [url] = mockFetch.mock.calls[0];
+      expect(url).toContain('/api/compress/question-specific/batch');
     });
   });
 });

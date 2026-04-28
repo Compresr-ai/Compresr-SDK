@@ -31,7 +31,9 @@ from .agentic_search import (
     SearchResult,
 )
 from .base import BaseResponse, MessageResponse
-from .inference import (  # Streaming; Compression
+from .inference import (  # Streaming; Compression; Agnostic Batch; Query-Specific Batch
+    AgnosticBatchInput,
+    AgnosticBatchRequest,
     CompressBatchInput,
     CompressBatchItemResult,
     CompressBatchRequest,
@@ -77,7 +79,10 @@ __all__ = [
     "CompressRequest",
     "CompressResponse",
     "CompressResult",
-    # Batch Compression
+    # Agnostic Batch Compression
+    "AgnosticBatchInput",
+    "AgnosticBatchRequest",
+    # Query-Specific Batch Compression
     "CompressBatchInput",
     "CompressBatchRequest",
     "CompressBatchResult",

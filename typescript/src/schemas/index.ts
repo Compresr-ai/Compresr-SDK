@@ -15,6 +15,8 @@ export {
 // Compression
 export {
   CompressRequestSchema,
+  AgnosticBatchInputSchema,
+  AgnosticBatchRequestSchema,
   CompressBatchInputSchema,
   CompressBatchRequestSchema,
   CompressResultSchema,
@@ -23,6 +25,8 @@ export {
   CompressResponseSchema,
   CompressBatchResponseSchema,
   type CompressRequest,
+  type AgnosticBatchInput,
+  type AgnosticBatchRequest,
   type CompressBatchInput,
   type CompressBatchRequest,
   type CompressResult,

@@ -5,6 +5,7 @@ export const ENDPOINTS = {
   // Agnostic compression (no query required)
   COMPRESS_AGNOSTIC: '/api/compress/question-agnostic/',
   COMPRESS_AGNOSTIC_STREAM: '/api/compress/question-agnostic/stream',
+  COMPRESS_AGNOSTIC_BATCH: '/api/compress/question-agnostic/batch',
 
   // Query-specific compression (query required)
   COMPRESS_QS: '/api/compress/question-specific/',

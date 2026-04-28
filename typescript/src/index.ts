@@ -59,5 +59,5 @@ export {
   type StreamChunk,
 } from './schemas/index.js';
 
-// Version
-export const VERSION = '1.0.0';
+// Version - re-export from version.ts
+export { SDK_VERSION as VERSION } from './version.js';

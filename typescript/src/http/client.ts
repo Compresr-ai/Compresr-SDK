@@ -16,8 +16,7 @@ import {
   ConnectionError,
 } from '../errors/index.js';
 import { handleHttpError, type ErrorBody } from './errors.js';
-
-const SDK_VERSION = '1.0.0';
+import { SDK_VERSION } from '../version.js';
 
 /**
  * HTTP client configuration options
@@ -51,7 +50,7 @@ export class HttpClient {
     }
 
     this.apiKey = options.apiKey;
-    this.baseUrl = options.baseUrl ?? DEFAULT_BASE_URL;
+    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT;
   }
 
@@ -71,6 +70,7 @@ export class HttpClient {
    * Build full URL from endpoint
    */
   private url(endpoint: string): string {
+    // Endpoint already starts with /, so no double slash issue
     return `${this.baseUrl}${endpoint}`;
   }
 

@@ -42,30 +42,19 @@ describe('CompressRequestSchema', () => {
     }
   });
 
-  it('should validate request with array context', () => {
+  it('should reject array context (use batch for multiple contexts)', () => {
     const result = CompressRequestSchema.safeParse({
       context: ['Doc 1', 'Doc 2'],
       compression_model_name: 'espresso_v1',
     });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.context).toEqual(['Doc 1', 'Doc 2']);
-    }
+    // Array context is no longer supported - use batch endpoint instead
+    expect(result.success).toBe(false);
   });
 
   it('should reject empty context string', () => {
     const result = CompressRequestSchema.safeParse({
       context: '',
-      compression_model_name: 'espresso_v1',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject empty context array', () => {
-    const result = CompressRequestSchema.safeParse({
-      context: [],
       compression_model_name: 'espresso_v1',
     });
 

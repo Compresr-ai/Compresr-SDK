@@ -40,6 +40,14 @@ from ..exceptions import (
     ValidationError,
 )
 
+# Get version dynamically
+try:
+    from importlib.metadata import version as get_version
+
+    SDK_VERSION = get_version("compresr")
+except Exception:
+    SDK_VERSION = "0.0.0-dev"
+
 
 class HTTPClient:
     """Internal HTTP client for Compresr API."""
@@ -47,6 +55,7 @@ class HTTPClient:
     def __init__(
         self,
         api_key: str,
+        base_url: Optional[str] = None,
         timeout: Optional[int] = None,
     ):
         if not api_key:
@@ -57,7 +66,7 @@ class HTTPClient:
             )
 
         self._api_key = api_key
-        self._base_url = API_CONFIG.BASE_URL
+        self._base_url = (base_url or API_CONFIG.BASE_URL).rstrip("/")
         self._timeout = timeout or API_CONFIG.DEFAULT_TIMEOUT
         self._async_client: Optional["httpx.AsyncClient"] = None
 
@@ -67,10 +76,11 @@ class HTTPClient:
             HEADERS.API_KEY: self._api_key,
             HEADERS.CONTENT_TYPE: HEADERS.JSON,
             HEADERS.ACCEPT: HEADERS.JSON,
-            "User-Agent": "compresr-python-sdk/2.0.0",
+            "User-Agent": f"compresr-python-sdk/{SDK_VERSION}",
         }
 
     def _url(self, endpoint: str) -> str:
+        # Ensure proper URL joining (no double slashes)
         return f"{self._base_url}{endpoint}"
 
     def _extract_error_message(self, body: Dict[str, Any]) -> str:
@@ -292,7 +302,7 @@ class HTTPClient:
         # Use only auth + user-agent headers; httpx sets Content-Type for multipart
         mp_headers = {
             "X-API-Key": self._api_key,
-            "User-Agent": "compresr-python-sdk/2.0.0",
+            "User-Agent": f"compresr-python-sdk/{SDK_VERSION}",
         }
 
         try:

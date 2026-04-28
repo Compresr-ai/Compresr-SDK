@@ -5,11 +5,11 @@ Contains shared logic for HTTP calls and response handling.
 Do not use directly - use CompressionClient or FilterClient.
 """
 
-from typing import ClassVar, FrozenSet, Generator, List, Optional, Tuple, Union
+from typing import Generator, Optional, Tuple
 
 from pydantic import ValidationError as PydanticValidationError
 
-from ..config import AGNOSTIC_ENDPOINT_MODELS, ENDPOINTS, QS_ENDPOINT_MODELS
+from ..config import ENDPOINTS
 from ..exceptions import ValidationError
 from ..schemas import (
     CompressRequest,
@@ -27,51 +27,44 @@ class BaseCompressionClient(HTTPClient):
     Subclasses (CompressionClient, FilterClient) implement user-facing methods.
     """
 
-    # Subclasses should override this with their allowed models
-    ALLOWED_MODELS: ClassVar[FrozenSet[str]] = frozenset()
-
-    def _validate_model(self, model_name: str) -> None:
-        """Validate that the model is allowed for this client type."""
-        if self.ALLOWED_MODELS and model_name not in self.ALLOWED_MODELS:
-            allowed = ", ".join(sorted(self.ALLOWED_MODELS))
-            raise ValidationError(
-                f"Model '{model_name}' is not valid for {self.__class__.__name__}. "
-                f"Allowed models: {allowed}"
-            )
-
     def _build_request(
         self,
-        context: Union[str, List[str]],
+        context: str,
         compression_model_name: str,
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
     ) -> CompressRequest:
-        """Build and validate a compression request."""
-        self._validate_model(compression_model_name)
+        """Build and validate a compression request.
+
+        Note: coarse is only included when query is provided (QS endpoint).
+        Agnostic endpoint doesn't support coarse parameter.
+        """
         try:
+            # Only include coarse when using query-specific endpoint
+            # Agnostic endpoint doesn't support coarse parameter
+            effective_coarse = coarse if query is not None else None
+
             return CompressRequest(
                 context=context,
                 compression_model_name=compression_model_name,
                 query=query,
                 target_compression_ratio=target_compression_ratio,
-                coarse=coarse,
+                coarse=effective_coarse,
             )
         except PydanticValidationError as e:
             raise ValidationError(str(e)) from e
 
-    def _resolve_endpoints(self, model_name: str) -> Tuple[str, str]:
-        """Resolve base and stream endpoints based on model name.
+    def _resolve_endpoints(self, model_name: str, query: Optional[str] = None) -> Tuple[str, str]:
+        """Resolve base and stream endpoints based on whether query is provided.
 
         Returns:
             (base_endpoint, stream_endpoint) tuple
         """
-        if model_name in AGNOSTIC_ENDPOINT_MODELS:
-            return ENDPOINTS.COMPRESS_AGNOSTIC, ENDPOINTS.COMPRESS_AGNOSTIC_STREAM
-        elif model_name in QS_ENDPOINT_MODELS:
+        if query is not None:
             return ENDPOINTS.COMPRESS_QS, ENDPOINTS.COMPRESS_QS_STREAM
         else:
-            raise ValidationError(f"Model '{model_name}' does not map to a known endpoint.")
+            return ENDPOINTS.COMPRESS_AGNOSTIC, ENDPOINTS.COMPRESS_AGNOSTIC_STREAM
 
     def _do_request(self, endpoint: str, req: CompressRequest) -> CompressResponse:
         """Execute compression request (sync)."""

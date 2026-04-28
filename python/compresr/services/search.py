@@ -30,15 +30,21 @@ class SearchClient(HTTPClient):
 
     Args:
         api_key: Your Compresr API key (required) - "cmp_..."
+        base_url: API base URL (optional) - defaults to https://api.compresr.ai
+                  Use for on-prem deployments, e.g., "http://localhost:8000"
         timeout: Request timeout in seconds (optional)
 
     Available Models:
         - macchiato_v1 (default): Agentic search, query + index_name REQUIRED
 
     Example:
-        from compresr import SearchClient, MODELS
+        from compresr import SearchClient
 
+        # Cloud (default)
         client = SearchClient(api_key="cmp_...")
+
+        # On-prem
+        client = SearchClient(api_key="cmp_...", base_url="http://localhost:8000")
 
         response = client.search(
             query="What is machine learning?",

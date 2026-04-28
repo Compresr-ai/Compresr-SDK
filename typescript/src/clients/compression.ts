@@ -7,13 +7,21 @@
  * Models:
  * - espresso_v1 (default): Agnostic compression, no query needed
  * - latte_v1: Query-specific compression, query REQUIRED
+ *
+ * Endpoints:
+ *   Single:
+ *     /compress/question-agnostic/     - context: string (no query)
+ *     /compress/question-specific/     - context: string, query: string
+ *   Batch:
+ *     /compress/question-agnostic/batch - inputs: [{context}]
+ *     /compress/question-specific/batch - inputs: [{context, query}]
+ *   Stream:
+ *     /compress/question-agnostic/stream - context: string
+ *     /compress/question-specific/stream - context: string, query: string
  */
 import { ZodError } from 'zod';
 import {
   ENDPOINTS,
-  ALLOWED_COMPRESSION_MODELS,
-  QUERY_REQUIRED_MODELS,
-  AGNOSTIC_ENDPOINT_MODELS,
   MODELS,
 } from '../config/index.js';
 import { ValidationError } from '../errors/index.js';
@@ -21,6 +29,7 @@ import { HttpClient, type HttpClientOptions } from '../http/client.js';
 import {
   CompressRequestSchema,
   CompressResponseSchema,
+  AgnosticBatchRequestSchema,
   CompressBatchRequestSchema,
   CompressBatchResponseSchema,
   type CompressResponse,
@@ -32,8 +41,8 @@ import {
  * Options for single compression
  */
 export interface CompressOptions {
-  /** Context to compress - single string or array of strings */
-  context: string | string[];
+  /** Context to compress (single string) */
+  context: string;
   /** Compression model (default: espresso_v1) */
   compressionModelName?: string;
   /** Query for query-specific models (required for latte_v1) */
@@ -44,23 +53,33 @@ export interface CompressOptions {
    * - >1: Nx factor (e.g., 4 = 4x compression = keep 25%)
    */
   targetCompressionRatio?: number;
-  /** Use paragraph-level compression (faster, latte_v1 only) */
+  /** 
+   * Paragraph-level compression (only for query-specific with latte_v1).
+   * - true: faster, coarser compression (default for latte_v1)
+   * - false: slower, token-level compression
+   * Ignored for agnostic compression (no query).
+   */
   coarse?: boolean;
 }
 
 /**
  * Options for batch compression
+ * - If queries is undefined: uses agnostic endpoint (no queries required)
+ * - If queries is provided: uses query-specific endpoint
  */
 export interface CompressBatchOptions {
   /** List of contexts to compress (1-100 items) */
   contexts: string[];
-  /** Single query for all contexts, or one query per context */
-  queries: string | string[];
-  /** Compression model (default: latte_v1 for batch) */
+  /** Single query for all contexts, or one query per context. Omit for agnostic batch. */
+  queries?: string | string[];
+  /** Compression model (default: espresso_v1) */
   compressionModelName?: string;
   /** Target compression ratio */
   targetCompressionRatio?: number;
-  /** Use paragraph-level compression (faster) */
+  /** 
+   * Paragraph-level compression (only for query-specific batch).
+   * Ignored for agnostic batch (queries undefined).
+   */
   coarse?: boolean;
 }
 
@@ -73,15 +92,27 @@ export interface CompressBatchOptions {
  *
  * const client = new CompressionClient({ apiKey: 'cmp_...' });
  *
- * // Agnostic compression
+ * // Single agnostic compression
  * const result = await client.compress({
  *   context: 'Your long context...',
  * });
  *
- * // Query-specific compression
+ * // Single query-specific compression
  * const result = await client.compress({
  *   context: 'Your long context...',
  *   query: 'What is the main conclusion?',
+ *   compressionModelName: 'latte_v1',
+ * });
+ *
+ * // Batch agnostic compression
+ * const result = await client.compressBatch({
+ *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
+ * });
+ *
+ * // Batch query-specific compression
+ * const result = await client.compressBatch({
+ *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
+ *   queries: 'What are the key points?',
  *   compressionModelName: 'latte_v1',
  * });
  * ```
@@ -93,62 +124,28 @@ export class CompressionClient {
     this.http = new HttpClient(options);
   }
 
-  /**
-   * Validate that the model is allowed
-   */
-  private validateModel(modelName: string): void {
-    if (!ALLOWED_COMPRESSION_MODELS.has(modelName)) {
-      const allowed = Array.from(ALLOWED_COMPRESSION_MODELS).join(', ');
-      throw new ValidationError(
-        `Model '${modelName}' is not valid for CompressionClient. Allowed: ${allowed}`
-      );
-    }
-  }
-
-  /**
-   * Validate query parameter against model requirements
-   */
-  private validateQueryForModel(modelName: string, query?: string): void {
-    if (QUERY_REQUIRED_MODELS.has(modelName) && !query) {
-      throw new ValidationError(
-        `Model '${modelName}' requires a 'query' parameter.`
-      );
-    }
-    if (!QUERY_REQUIRED_MODELS.has(modelName) && query !== undefined) {
-      throw new ValidationError(
-        `Model '${modelName}' does not accept a 'query' parameter. ` +
-          `Remove the query or use 'latte_v1' for query-specific compression.`
-      );
-    }
-  }
-
-  /**
-   * Resolve endpoints based on model name
-   */
-  private resolveEndpoints(modelName: string): {
+  private resolveEndpoints(query?: string): {
     base: string;
     stream: string;
   } {
-    if (AGNOSTIC_ENDPOINT_MODELS.has(modelName)) {
+    if (query !== undefined) {
       return {
-        base: ENDPOINTS.COMPRESS_AGNOSTIC,
-        stream: ENDPOINTS.COMPRESS_AGNOSTIC_STREAM,
+        base: ENDPOINTS.COMPRESS_QS,
+        stream: ENDPOINTS.COMPRESS_QS_STREAM,
       };
     }
     return {
-      base: ENDPOINTS.COMPRESS_QS,
-      stream: ENDPOINTS.COMPRESS_QS_STREAM,
+      base: ENDPOINTS.COMPRESS_AGNOSTIC,
+      stream: ENDPOINTS.COMPRESS_AGNOSTIC_STREAM,
     };
   }
 
-  /**
-   * Build request payload
-   */
   private buildRequest(options: CompressOptions): Record<string, unknown> {
     const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
 
-    this.validateModel(modelName);
-    this.validateQueryForModel(modelName, options.query);
+    // Only include coarse when using query-specific endpoint
+    // Agnostic endpoint doesn't support coarse parameter
+    const effectiveCoarse = options.query !== undefined ? options.coarse : undefined;
 
     try {
       const request = CompressRequestSchema.parse({
@@ -156,7 +153,7 @@ export class CompressionClient {
         compression_model_name: modelName,
         query: options.query,
         target_compression_ratio: options.targetCompressionRatio,
-        coarse: options.coarse,
+        coarse: effectiveCoarse,
       });
       return request;
     } catch (error) {
@@ -172,20 +169,22 @@ export class CompressionClient {
   }
 
   // ==========================================================================
-  // Public Methods
+  // Single Compression
   // ==========================================================================
 
   /**
-   * Compress context (async)
+   * Compress a single context
+   *
+   * For multiple contexts, use compressBatch().
    *
    * @example
    * ```typescript
-   * // Agnostic compression (espresso_v1)
+   * // Agnostic compression (no query)
    * const result = await client.compress({
    *   context: 'Your long context text...',
    * });
    *
-   * // Query-specific compression (latte_v1)
+   * // Query-specific compression (with query)
    * const result = await client.compress({
    *   context: 'Your long context text...',
    *   query: 'What is the main conclusion?',
@@ -196,9 +195,8 @@ export class CompressionClient {
    * ```
    */
   async compress(options: CompressOptions): Promise<CompressResponse> {
-    const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
     const request = this.buildRequest(options);
-    const { base } = this.resolveEndpoints(modelName);
+    const { base } = this.resolveEndpoints(options.query);
 
     const response = await this.http.post<unknown>(base, request);
     return CompressResponseSchema.parse(response);
@@ -219,9 +217,8 @@ export class CompressionClient {
   async *compressStream(
     options: CompressOptions
   ): AsyncGenerator<StreamChunk, void, undefined> {
-    const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
     const request = this.buildRequest(options);
-    const { stream } = this.resolveEndpoints(modelName);
+    const { stream } = this.resolveEndpoints(options.query);
 
     for await (const content of this.http.stream(stream, request)) {
       yield { content, done: false };
@@ -229,24 +226,35 @@ export class CompressionClient {
     yield { content: '', done: true };
   }
 
+  // ==========================================================================
+  // Batch Compression
+  // ==========================================================================
+
   /**
    * Batch compress multiple contexts
    *
-   * More efficient than calling compress() multiple times.
-   * Only supports query-specific models (latte_v1).
+   * - If queries is undefined: uses agnostic endpoint (no queries required)
+   * - If queries is provided: uses query-specific endpoint
    *
    * @example
    * ```typescript
-   * // Same query for all contexts
+   * // Agnostic batch (no queries)
+   * const result = await client.compressBatch({
+   *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
+   * });
+   *
+   * // Query-specific batch (same query for all)
    * const result = await client.compressBatch({
    *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
    *   queries: 'What are the key points?',
+   *   compressionModelName: 'latte_v1',
    * });
    *
-   * // Different query per context
+   * // Query-specific batch (different queries)
    * const result = await client.compressBatch({
    *   contexts: ['ML doc...', 'NLP doc...'],
    *   queries: ['What is ML?', 'What is NLP?'],
+   *   compressionModelName: 'latte_v1',
    * });
    *
    * console.log(`Saved ${result.data.total_tokens_saved} tokens!`);
@@ -255,48 +263,55 @@ export class CompressionClient {
   async compressBatch(
     options: CompressBatchOptions
   ): Promise<CompressBatchResponse> {
-    const modelName = options.compressionModelName ?? MODELS.LATTE;
-
-    // Batch only supports query-specific models
-    if (!QUERY_REQUIRED_MODELS.has(modelName)) {
-      throw new ValidationError(
-        `Batch compression only supports query-specific models: ${Array.from(QUERY_REQUIRED_MODELS).join(', ')}`
-      );
-    }
-
-    this.validateModel(modelName);
-
-    // Build query list
-    const queryList =
-      typeof options.queries === 'string'
-        ? Array(options.contexts.length).fill(options.queries)
-        : options.queries;
-
-    if (queryList.length !== options.contexts.length) {
-      throw new ValidationError(
-        `Number of queries (${queryList.length}) must match number of contexts (${options.contexts.length})`
-      );
-    }
-
-    // Build inputs
-    const inputs = options.contexts.map((context, i) => ({
-      context,
-      query: queryList[i],
-    }));
+    const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
 
     try {
-      const request = CompressBatchRequestSchema.parse({
-        inputs,
-        compression_model_name: modelName,
-        target_compression_ratio: options.targetCompressionRatio,
-        coarse: options.coarse,
-      });
+      if (options.queries === undefined) {
+        // Agnostic batch (no queries)
+        const inputs = options.contexts.map((context) => ({ context }));
+        const request = AgnosticBatchRequestSchema.parse({
+          inputs,
+          compression_model_name: modelName,
+          target_compression_ratio: options.targetCompressionRatio,
+        });
 
-      const response = await this.http.post<unknown>(
-        ENDPOINTS.COMPRESS_QS_BATCH,
-        request
-      );
-      return CompressBatchResponseSchema.parse(response);
+        const response = await this.http.post<unknown>(
+          ENDPOINTS.COMPRESS_AGNOSTIC_BATCH,
+          request
+        );
+        return CompressBatchResponseSchema.parse(response);
+      } else {
+        // Query-specific batch
+        const queryList =
+          typeof options.queries === 'string'
+            ? Array(options.contexts.length).fill(options.queries)
+            : options.queries;
+
+        if (queryList.length !== options.contexts.length) {
+          throw new ValidationError(
+            `Number of queries (${queryList.length}) must match number of contexts (${options.contexts.length})`
+          );
+        }
+
+        const inputs = options.contexts.map((context, i) => ({
+          context,
+          // Safe: queryList length validated above
+          query: queryList[i] as string,
+        }));
+
+        const request = CompressBatchRequestSchema.parse({
+          inputs,
+          compression_model_name: modelName,
+          target_compression_ratio: options.targetCompressionRatio,
+          coarse: options.coarse,
+        });
+
+        const response = await this.http.post<unknown>(
+          ENDPOINTS.COMPRESS_QS_BATCH,
+          request
+        );
+        return CompressBatchResponseSchema.parse(response);
+      }
     } catch (error) {
       if (error instanceof ZodError) {
         const firstError = error.errors[0];
