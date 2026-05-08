@@ -59,6 +59,14 @@ class CompressRequest(BaseModel):
         None,
         description="Coarse-grained (paragraph-level) compression. True=faster, False=token-level (default). Only for latte_v1.",
     )
+    heuristic_chunking: Optional[bool] = Field(
+        None,
+        description="Use heuristic chunking for better structure preservation. Only for query-specific models.",
+    )
+    disable_placeholders: Optional[bool] = Field(
+        None,
+        description="Disable placeholder tokens in compressed output. Only for query-specific models.",
+    )
     source: str = Field(default="sdk:python", description="Source of request for analytics")
 
 
@@ -148,6 +156,14 @@ class CompressBatchRequest(BaseModel):
     coarse: Optional[bool] = Field(
         None,
         description="Coarse-grained (paragraph-level) compression. Only for latte_v1.",
+    )
+    heuristic_chunking: Optional[bool] = Field(
+        None,
+        description="Use heuristic chunking for better structure preservation. Only for query-specific.",
+    )
+    disable_placeholders: Optional[bool] = Field(
+        None,
+        description="Disable placeholder tokens in compressed output. Only for query-specific.",
     )
     source: str = Field(default="sdk:python", description="Source of request")
 

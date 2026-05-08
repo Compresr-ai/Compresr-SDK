@@ -60,6 +60,16 @@ export interface CompressOptions {
    * Ignored for agnostic compression (no query).
    */
   coarse?: boolean;
+  /**
+   * Use heuristic chunking for better structure preservation.
+   * Only for query-specific models. Ignored for agnostic.
+   */
+  heuristicChunking?: boolean;
+  /**
+   * Disable placeholder tokens in compressed output.
+   * Only for query-specific models. Ignored for agnostic.
+   */
+  disablePlaceholders?: boolean;
 }
 
 /**
@@ -81,6 +91,16 @@ export interface CompressBatchOptions {
    * Ignored for agnostic batch (queries undefined).
    */
   coarse?: boolean;
+  /**
+   * Use heuristic chunking for better structure preservation.
+   * Only for query-specific batch. Ignored for agnostic.
+   */
+  heuristicChunking?: boolean;
+  /**
+   * Disable placeholder tokens in compressed output.
+   * Only for query-specific batch. Ignored for agnostic.
+   */
+  disablePlaceholders?: boolean;
 }
 
 /**
@@ -143,9 +163,12 @@ export class CompressionClient {
   private buildRequest(options: CompressOptions): Record<string, unknown> {
     const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
 
-    // Only include coarse when using query-specific endpoint
-    // Agnostic endpoint doesn't support coarse parameter
-    const effectiveCoarse = options.query !== undefined ? options.coarse : undefined;
+    // Only include QS-specific params when using query-specific endpoint
+    // Agnostic endpoint doesn't support these parameters
+    const isQuerySpecific = options.query !== undefined;
+    const effectiveCoarse = isQuerySpecific ? options.coarse : undefined;
+    const effectiveHeuristicChunking = isQuerySpecific ? options.heuristicChunking : undefined;
+    const effectiveDisablePlaceholders = isQuerySpecific ? options.disablePlaceholders : undefined;
 
     try {
       const request = CompressRequestSchema.parse({
@@ -154,6 +177,8 @@ export class CompressionClient {
         query: options.query,
         target_compression_ratio: options.targetCompressionRatio,
         coarse: effectiveCoarse,
+        heuristic_chunking: effectiveHeuristicChunking,
+        disable_placeholders: effectiveDisablePlaceholders,
       });
       return request;
     } catch (error) {
@@ -304,6 +329,8 @@ export class CompressionClient {
           compression_model_name: modelName,
           target_compression_ratio: options.targetCompressionRatio,
           coarse: options.coarse,
+          heuristic_chunking: options.heuristicChunking,
+          disable_placeholders: options.disablePlaceholders,
         });
 
         const response = await this.http.post<unknown>(

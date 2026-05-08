@@ -39,18 +39,6 @@ class Endpoints:
     COMPRESS_QS_STREAM: str = "/api/compress/question-specific/stream"
     COMPRESS_QS_BATCH: str = "/api/compress/question-specific/batch"
 
-    # Agentic search (query + index_name required)
-    SEARCH: str = "/api/compress/search/"
-    SEARCH_STREAM: str = "/api/compress/search/stream"
-
-    # Index management (for agentic search)
-    SEARCH_INDEX_CREATE: str = "/api/compress/search/indexes/{index_name}"
-    SEARCH_INDEX_TASK: str = "/api/compress/search/indexes/tasks/{task_id}"
-    SEARCH_INDEX_DELETE: str = "/api/compress/search/indexes/{index_name}"
-
-    # Health
-    SEARCH_HEALTH: str = "/api/compress/search/health"
-
 
 @dataclass(frozen=True)
 class Headers:
@@ -85,9 +73,6 @@ class Models:
     - espresso_v1: Agnostic compression (default) - no query needed
     - latte_v1: Query-specific compression - query REQUIRED, supports compression_ratio and coarse
 
-    Search models (SearchClient):
-    - macchiato_v1: Agentic search over indexed knowledge bases - query + index_name REQUIRED
-
     Agentic models (for tool/history compression):
     - agentic_history_lingua: History compression (Lingua) - no query
     - agentic_tool_output_gemfilter: Tool output (GemFilter) - query required
@@ -99,9 +84,6 @@ class Models:
     ESPRESSO: str = "espresso_v1"
     LATTE: str = "latte_v1"
 
-    # Search models
-    MACCHIATO: str = "macchiato_v1"
-
     # Agentic models
     AGENTIC_HISTORY_LINGUA: str = "agentic_history_lingua"
     AGENTIC_TOOL_OUTPUT_GEMFILTER: str = "agentic_tool_output_gemfilter"
@@ -110,12 +92,10 @@ class Models:
 
     # Default model aliases
     DEFAULT_COMPRESSION: str = "espresso_v1"
-    DEFAULT_SEARCH: str = "macchiato_v1"
     DEFAULT: str = "espresso_v1"
 
 
 ALLOWED_COMPRESSION_MODELS = frozenset({"espresso_v1", "latte_v1"})
-ALLOWED_SEARCH_MODELS = frozenset({"macchiato_v1"})
 QUERY_REQUIRED_MODELS = frozenset({"latte_v1"})
 COARSE_SUPPORTED_MODELS = frozenset({"latte_v1"})
 AGNOSTIC_ENDPOINT_MODELS = frozenset({"espresso_v1"})

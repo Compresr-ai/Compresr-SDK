@@ -110,9 +110,35 @@ fi
 
 echo ""
 
+# Run TypeScript SDK linting
+echo "Running TypeScript SDK linting..."
+cd typescript
+if npm run lint; then
+    echo -e "${GREEN}✓ TypeScript SDK linting passed${NC}"
+else
+    echo -e "${RED}✗ TypeScript SDK linting failed${NC}"
+    FAILED=$((FAILED + 1))
+fi
+cd ..
+
+echo ""
+
+# Run TypeScript SDK tests
+echo "Running TypeScript SDK tests..."
+cd typescript
+if npm test; then
+    echo -e "${GREEN}✓ TypeScript SDK tests passed${NC}"
+else
+    echo -e "${RED}✗ TypeScript SDK tests failed${NC}"
+    FAILED=$((FAILED + 1))
+fi
+cd ..
+
+echo ""
+
 # Run Security checks
 echo "Running Security checks..."
-if ! grep -rE "cp-[a-zA-Z0-9]{20,}" --include="*.py" --include="*.sh" python/ curl/ 2>/dev/null | grep -v "example" | grep -q .; then
+if ! grep -rE "cp-[a-zA-Z0-9]{20,}" --include="*.py" --include="*.sh" --include="*.ts" python/ curl/ typescript/ 2>/dev/null | grep -v "example" | grep -q .; then
     echo -e "${GREEN}✓ Security check passed (no hardcoded secrets)${NC}"
 else
     echo -e "${RED}✗ Security check failed (hardcoded secrets found)${NC}"

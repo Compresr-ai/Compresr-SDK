@@ -20,6 +20,8 @@ export const CompressRequestSchema = z.object({
   query: z.string().min(1, 'query must not be empty').optional(),
   target_compression_ratio: z.number().nonnegative().optional(),
   coarse: z.boolean().optional(),
+  heuristic_chunking: z.boolean().optional(),
+  disable_placeholders: z.boolean().optional(),
   source: z.string().default('sdk:typescript'),
 });
 
@@ -64,6 +66,8 @@ export const CompressBatchRequestSchema = z.object({
   compression_model_name: z.string(),
   target_compression_ratio: z.number().nonnegative().optional(),
   coarse: z.boolean().optional(),
+  heuristic_chunking: z.boolean().optional(),
+  disable_placeholders: z.boolean().optional(),
   source: z.string().default('sdk:typescript'),
 });
 
