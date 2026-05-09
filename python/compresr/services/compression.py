@@ -87,6 +87,8 @@ class CompressionClient(BaseCompressionClient):
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
+        heuristic_chunking: Optional[bool] = None,
+        disable_placeholders: Optional[bool] = None,
     ) -> CompressResponse:
         """
         Compress a single context (sync).
@@ -105,12 +107,22 @@ class CompressionClient(BaseCompressionClient):
                     - False: slower, token-level (finer grained)
                     - None: use backend default
                     Ignored for agnostic compression (no query).
+            heuristic_chunking: Use heuristic chunking for structure preservation.
+                    Only for query-specific models. Ignored for agnostic.
+            disable_placeholders: Disable placeholder tokens in output.
+                    Only for query-specific models. Ignored for agnostic.
 
         Returns:
             CompressResponse with compressed context and metrics
         """
         req = self._build_request(
-            context, compression_model_name, query, target_compression_ratio, coarse
+            context,
+            compression_model_name,
+            query,
+            target_compression_ratio,
+            coarse,
+            heuristic_chunking,
+            disable_placeholders,
         )
         endpoint, _ = self._resolve_endpoints(compression_model_name, query)
         return self._do_request(endpoint, req)
@@ -122,6 +134,8 @@ class CompressionClient(BaseCompressionClient):
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
+        heuristic_chunking: Optional[bool] = None,
+        disable_placeholders: Optional[bool] = None,
     ) -> CompressResponse:
         """
         Compress a single context (async).
@@ -135,12 +149,20 @@ class CompressionClient(BaseCompressionClient):
             target_compression_ratio: Target ratio (optional)
             coarse: Paragraph-level compression (only for query-specific with latte_v1).
                     Ignored for agnostic compression (no query).
+            heuristic_chunking: Use heuristic chunking for structure preservation.
+            disable_placeholders: Disable placeholder tokens in output.
 
         Returns:
             CompressResponse with compressed context and metrics
         """
         req = self._build_request(
-            context, compression_model_name, query, target_compression_ratio, coarse
+            context,
+            compression_model_name,
+            query,
+            target_compression_ratio,
+            coarse,
+            heuristic_chunking,
+            disable_placeholders,
         )
         endpoint, _ = self._resolve_endpoints(compression_model_name, query)
         return await self._do_request_async(endpoint, req)
@@ -152,6 +174,8 @@ class CompressionClient(BaseCompressionClient):
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
+        heuristic_chunking: Optional[bool] = None,
+        disable_placeholders: Optional[bool] = None,
     ) -> Generator[StreamChunk, None, None]:
         """
         Stream compression (sync).
@@ -163,12 +187,20 @@ class CompressionClient(BaseCompressionClient):
             target_compression_ratio: Target ratio (optional)
             coarse: Paragraph-level compression (only for query-specific with latte_v1).
                     Ignored for agnostic compression (no query).
+            heuristic_chunking: Use heuristic chunking for structure preservation.
+            disable_placeholders: Disable placeholder tokens in output.
 
         Yields:
             StreamChunk objects with compressed content
         """
         req = self._build_request(
-            context, compression_model_name, query, target_compression_ratio, coarse
+            context,
+            compression_model_name,
+            query,
+            target_compression_ratio,
+            coarse,
+            heuristic_chunking,
+            disable_placeholders,
         )
         _, stream_endpoint = self._resolve_endpoints(compression_model_name, query)
         yield from self._do_stream(stream_endpoint, req)
@@ -182,6 +214,8 @@ class CompressionClient(BaseCompressionClient):
         compression_model_name: str = "espresso_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
+        heuristic_chunking: Optional[bool] = None,
+        disable_placeholders: Optional[bool] = None,
     ) -> CompressBatchResponse:
         """
         Batch compress multiple contexts (sync).
@@ -199,6 +233,10 @@ class CompressionClient(BaseCompressionClient):
             target_compression_ratio: Target ratio (optional): 0-1 or >1 for Nx
             coarse: Paragraph-level compression (only for query-specific batch).
                     Ignored for agnostic batch (queries=None).
+            heuristic_chunking: Use heuristic chunking for structure preservation.
+                    Only for query-specific batch. Ignored for agnostic.
+            disable_placeholders: Disable placeholder tokens in output.
+                    Only for query-specific batch. Ignored for agnostic.
 
         Returns:
             CompressBatchResponse with results for each context and aggregated metrics
@@ -252,6 +290,8 @@ class CompressionClient(BaseCompressionClient):
                 compression_model_name=compression_model_name,
                 target_compression_ratio=target_compression_ratio,
                 coarse=coarse,
+                heuristic_chunking=heuristic_chunking,
+                disable_placeholders=disable_placeholders,
             )
             data = self.post(ENDPOINTS.COMPRESS_QS_BATCH, qs_req.model_dump(exclude_none=True))
 
@@ -264,6 +304,8 @@ class CompressionClient(BaseCompressionClient):
         compression_model_name: str = "espresso_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
+        heuristic_chunking: Optional[bool] = None,
+        disable_placeholders: Optional[bool] = None,
     ) -> CompressBatchResponse:
         """
         Batch compress multiple contexts (async).
@@ -281,6 +323,8 @@ class CompressionClient(BaseCompressionClient):
             target_compression_ratio: Target ratio (optional): 0-1 or >1 for Nx
             coarse: Paragraph-level compression (only for query-specific batch).
                     Ignored for agnostic batch (queries=None).
+            heuristic_chunking: Use heuristic chunking for structure preservation.
+            disable_placeholders: Disable placeholder tokens in output.
 
         Returns:
             CompressBatchResponse with results for each context and aggregated metrics
@@ -315,6 +359,8 @@ class CompressionClient(BaseCompressionClient):
                 compression_model_name=compression_model_name,
                 target_compression_ratio=target_compression_ratio,
                 coarse=coarse,
+                heuristic_chunking=heuristic_chunking,
+                disable_placeholders=disable_placeholders,
             )
             data = await self.post_async(
                 ENDPOINTS.COMPRESS_QS_BATCH, qs_req.model_dump(exclude_none=True)

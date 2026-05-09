@@ -35,19 +35,3 @@ export {
   type CompressResponse,
   type CompressBatchResponse,
 } from './compression.js';
-
-// Search
-export {
-  SearchRequestSchema,
-  IndexCreatePayloadSchema,
-  SearchResultSchema,
-  IndexTaskStatusSchema,
-  SearchResponseSchema,
-  IndexCreateResponseSchema,
-  type SearchRequest,
-  type IndexCreatePayload,
-  type SearchResult,
-  type IndexTaskStatus,
-  type SearchResponse,
-  type IndexCreateResponse,
-} from './search.js';

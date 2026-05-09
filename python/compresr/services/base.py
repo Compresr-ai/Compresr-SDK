@@ -34,16 +34,20 @@ class BaseCompressionClient(HTTPClient):
         query: Optional[str] = None,
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
+        heuristic_chunking: Optional[bool] = None,
+        disable_placeholders: Optional[bool] = None,
     ) -> CompressRequest:
         """Build and validate a compression request.
 
-        Note: coarse is only included when query is provided (QS endpoint).
-        Agnostic endpoint doesn't support coarse parameter.
+        Note: coarse, heuristic_chunking, disable_placeholders are only included
+        when query is provided (QS endpoint). Agnostic endpoint doesn't support them.
         """
         try:
-            # Only include coarse when using query-specific endpoint
-            # Agnostic endpoint doesn't support coarse parameter
+            # Only include QS-specific params when using query-specific endpoint
+            # Agnostic endpoint doesn't support these parameters
             effective_coarse = coarse if query is not None else None
+            effective_heuristic_chunking = heuristic_chunking if query is not None else None
+            effective_disable_placeholders = disable_placeholders if query is not None else None
 
             return CompressRequest(
                 context=context,
@@ -51,6 +55,8 @@ class BaseCompressionClient(HTTPClient):
                 query=query,
                 target_compression_ratio=target_compression_ratio,
                 coarse=effective_coarse,
+                heuristic_chunking=effective_heuristic_chunking,
+                disable_placeholders=effective_disable_placeholders,
             )
         except PydanticValidationError as e:
             raise ValidationError(str(e)) from e
