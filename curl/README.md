@@ -123,7 +123,6 @@ export COMPRESR_API_KEY="cmp_your_api_key_here"
 {
   "success": true,
   "data": {
-    "original_context": "Your long context...",
     "compressed_context": "Compressed version...",
     "original_tokens": 150,
     "compressed_tokens": 75,

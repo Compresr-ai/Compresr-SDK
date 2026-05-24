@@ -26,7 +26,7 @@ class TestAPIConfig:
         """Test API config has correct defaults."""
         config = APIConfig()
         assert config.API_KEY_PREFIX == "cmp_"
-        assert config.DEFAULT_TIMEOUT == 60
+        assert config.DEFAULT_TIMEOUT == 300  # 5 minutes
         assert config.STREAM_TIMEOUT == 300
 
     def test_frozen_dataclass(self):

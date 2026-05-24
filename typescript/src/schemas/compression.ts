@@ -81,7 +81,7 @@ export type CompressBatchRequest = z.infer<typeof CompressBatchRequestSchema>;
  * Single compression result
  */
 export const CompressResultSchema = z.object({
-  original_context: z.string(),
+  original_context: z.string().nullish(),
   compressed_context: z.string(),
   original_tokens: z.number(),
   compressed_tokens: z.number(),
@@ -97,7 +97,7 @@ export type CompressResult = z.infer<typeof CompressResultSchema>;
  * Batch item result
  */
 export const CompressBatchItemResultSchema = z.object({
-  original_context: z.string(),
+  original_context: z.string().nullish(),
   compressed_context: z.string(),
   original_tokens: z.number(),
   compressed_tokens: z.number(),

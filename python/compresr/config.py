@@ -16,7 +16,7 @@ class APIConfig:
     """API configuration."""
 
     API_KEY_PREFIX: str = "cmp_"
-    DEFAULT_TIMEOUT: int = 60
+    DEFAULT_TIMEOUT: int = 300  # 5 minutes
     STREAM_TIMEOUT: int = 300
 
     @property

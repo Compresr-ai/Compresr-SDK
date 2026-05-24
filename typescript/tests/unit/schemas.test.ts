@@ -105,6 +105,26 @@ describe('CompressResponseSchema', () => {
       expect(result.data.data).toBeNull();
     }
   });
+
+  it('should validate response without original_context (new server shape)', () => {
+    const result = CompressResponseSchema.safeParse({
+      success: true,
+      data: {
+        compressed_context: 'Hello',
+        original_tokens: 10,
+        compressed_tokens: 5,
+        actual_compression_ratio: 0.5,
+        tokens_saved: 5,
+        duration_ms: 100,
+      },
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.data?.original_context).toBeUndefined();
+      expect(result.data.data?.compressed_context).toBe('Hello');
+    }
+  });
 });
 
 describe('CompressBatchRequestSchema', () => {

@@ -8,8 +8,8 @@ export const API_KEY_PREFIX = 'cmp_';
 /** Default base URL for Compresr API */
 export const DEFAULT_BASE_URL = 'https://api.compresr.ai';
 
-/** Default request timeout in milliseconds */
-export const DEFAULT_TIMEOUT = 60_000;
+/** Default request timeout in milliseconds (5 minutes) */
+export const DEFAULT_TIMEOUT = 300_000;
 
 /** Stream request timeout in milliseconds */
 export const STREAM_TIMEOUT = 300_000;

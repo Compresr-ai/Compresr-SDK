@@ -99,6 +99,19 @@ class TestCompressResult:
         )
         assert result.target_compression_ratio == 0.5
 
+    def test_result_without_original_context(self):
+        """Server stopped returning original_context; field is optional and defaults to None."""
+        result = CompressResult(
+            compressed_context="Compressed",
+            original_tokens=100,
+            compressed_tokens=50,
+            actual_compression_ratio=0.5,
+            tokens_saved=50,
+            duration_ms=100,
+        )
+        assert result.original_context is None
+        assert result.compressed_context == "Compressed"
+
 
 class TestCompressResponse:
     """Test CompressResponse schema."""

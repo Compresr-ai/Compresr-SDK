@@ -80,7 +80,7 @@ class CompressResult(BaseModel):
 
     model_config = {"from_attributes": True, "protected_namespaces": ()}
 
-    original_context: str
+    original_context: Optional[str] = None
     compressed_context: str
     original_tokens: int
     compressed_tokens: int
@@ -173,7 +173,7 @@ class CompressBatchItemResult(BaseModel):
 
     model_config = {"from_attributes": True, "protected_namespaces": ()}
 
-    original_context: str
+    original_context: Optional[str] = None
     compressed_context: str
     original_tokens: int
     compressed_tokens: int
