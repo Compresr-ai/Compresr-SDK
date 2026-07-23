@@ -203,5 +203,8 @@
   },
   "bin": {
     "compresr-sdk": "./bin/compresr-sdk.cjs"
+  },
+  "overrides": {
+    "@hono/node-server": "^2.0.5"
   }
 }
