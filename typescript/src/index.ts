@@ -1,42 +1,47 @@
 /**
- * Compresr TypeScript SDK
- *
- * Intelligent context compression to reduce LLM API costs by 30-70%.
+ * Compresr TypeScript SDK — query-aware context compression for LLMs.
  *
  * @example
  * ```typescript
- * import { CompressionClient, MODELS } from 'compresr';
+ * import { CompressionClient } from 'compresr';
  *
  * const client = new CompressionClient({ apiKey: 'cmp_...' });
- *
- * // Agnostic compression (espresso_v1, default)
- * const result = await client.compress({
- *   context: 'Your long context...',
- * });
- * console.log(result.data.compressed_context);
- *
- * // Query-specific compression (latte_v1)
  * const result = await client.compress({
  *   context: 'Your long context...',
  *   query: 'What is the main conclusion?',
- *   compressionModelName: 'latte_v1',
  * });
+ * console.log(result.data?.compressed_context);
  * ```
  *
  * @packageDocumentation
  */
 
-// Clients
 export {
   CompressionClient,
   type CompressOptions,
   type CompressBatchOptions,
+  type CompressionClientOptions,
 } from './clients/index.js';
 
-// Configuration
-export { MODELS, type CompressionModel } from './config/index.js';
+// Agents (lazy peer-dep — only resolves when consumer touches the surface)
+export {
+  WebSearchTool,
+  createWebSearchTool,
+  type Citation,
+  type CompresrStats,
+  type CompressionPolicyOptions,
+  type NormalizedResult,
+  type TavilyOptions,
+  type BraveOptions,
+} from './agents/index.js';
 
-// Errors
+// Logger (pluggable; replace via setLogger to route SDK warnings)
+export { setLogger, type CompresrLogger } from './logger.js';
+
+export { MODELS, type Model } from './config/index.js';
+
+export { type RetryConfig } from './http/index.js';
+
 export {
   CompresrError,
   AuthenticationError,
@@ -49,7 +54,6 @@ export {
   type ErrorResponseData,
 } from './errors/index.js';
 
-// Schemas/Types
 export {
   type CompressResponse,
   type CompressResult,
@@ -59,5 +63,19 @@ export {
   type StreamChunk,
 } from './schemas/index.js';
 
-// Version - re-export from version.ts
+export {
+  ResearchAgent,
+  ResearchFacade,
+  parseResearchOutput,
+  DEFAULT_RESEARCH_SYSTEM_PROMPT,
+  type ResearchAgentOptions,
+  type ResearchAgentRunOptions,
+  type ResearchRunOptions,
+  type ParsedResearch,
+  type ResearchResult,
+  type ResearchUsage,
+  type Step,
+  type StepKind,
+} from './agents/research/index.js';
+
 export { SDK_VERSION as VERSION } from './version.js';

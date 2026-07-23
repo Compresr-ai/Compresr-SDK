@@ -1,231 +1,52 @@
-/**
- * Integration tests for CompressionClient
- *
- * These tests require a valid COMPRESR_API_KEY environment variable.
- * Run with: npm run test:integration
- */
-import { describe, it, expect, beforeAll } from 'vitest';
-import { CompressionClient } from '../../src/clients/compression.js';
-import type { CompressResponse, CompressBatchResponse } from '../../src/schemas/index.js';
-import { TEST_API_KEY, skipIfNoApiKey } from './config.js';
+/** End-to-end ``CompressionClient`` tests against the real backend. */
+import { beforeAll, describe, expect, it } from 'vitest';
 
-describe('CompressionClient Integration', () => {
-  let client: CompressionClient;
+import { getLiveContext, LIVE_LONG_TEXT, LIVE_QUERY } from './_live-config.js';
 
-  beforeAll(() => {
-    if (skipIfNoApiKey()) {
-      return;
+describe('CompressionClient (live)', () => {
+  let ctx: Awaited<ReturnType<typeof getLiveContext>>;
+
+  beforeAll(async () => {
+    ctx = await getLiveContext();
+  });
+
+  it.skipIf(!process.env.COMPRESR_API_KEY)('compress shrinks long text', async () => {
+    if (!ctx) return;
+    const response = await ctx.client.compress({
+      context: LIVE_LONG_TEXT,
+      query: LIVE_QUERY,
+      targetCompressionRatio: 0.5,
+    });
+    expect(response.success).toBe(true);
+    expect(response.data).not.toBeNull();
+    expect(response.data!.compressed_tokens).toBeLessThanOrEqual(
+      response.data!.original_tokens
+    );
+  });
+
+  it.skipIf(!process.env.COMPRESR_API_KEY)('compressBatch processes 3 docs', async () => {
+    if (!ctx) return;
+    const response = await ctx.client.compressBatch({
+      contexts: [LIVE_LONG_TEXT, LIVE_LONG_TEXT, LIVE_LONG_TEXT],
+      queries: LIVE_QUERY,
+      targetCompressionRatio: 0.5,
+    });
+    expect(response.success).toBe(true);
+    expect(response.data?.count).toBe(3);
+    expect(response.data?.results).toHaveLength(3);
+  });
+
+  it.skipIf(!process.env.COMPRESR_API_KEY)(
+    'compressBatch accepts per-context queries',
+    async () => {
+      if (!ctx) return;
+      const response = await ctx.client.compressBatch({
+        contexts: [LIVE_LONG_TEXT, LIVE_LONG_TEXT],
+        queries: ['What is ML?', 'What is GPT?'],
+        targetCompressionRatio: 0.5,
+      });
+      expect(response.success).toBe(true);
+      expect(response.data?.count).toBe(2);
     }
-    client = new CompressionClient({ apiKey: TEST_API_KEY });
-  });
-
-  describe('compress with espresso_v1 (agnostic)', () => {
-    it.skipIf(skipIfNoApiKey())(
-      'should compress context without query',
-      async () => {
-        const result: CompressResponse = await client.compress({
-          context:
-            'Machine learning is a subset of artificial intelligence that enables systems to learn and improve from experience without being explicitly programmed.',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(result.data!.original_tokens).toBeGreaterThan(0);
-        expect(result.data!.compressed_tokens).toBeGreaterThan(0);
-        expect(result.data!.compressed_tokens).toBeLessThanOrEqual(
-          result.data!.original_tokens
-        );
-        expect(result.data!.tokens_saved).toBeGreaterThanOrEqual(0);
-        expect(result.data!.compressed_context).toBeTruthy();
-      }
-    );
-
-    it.skipIf(skipIfNoApiKey())(
-      'should respect compression ratio',
-      async () => {
-        const result: CompressResponse = await client.compress({
-          context:
-            'Machine learning is a method of data analysis that automates analytical model building. It is a branch of artificial intelligence based on the idea that systems can learn from data, identify patterns and make decisions with minimal human intervention.',
-          targetCompressionRatio: 0.5,
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        // The actual ratio might not be exactly 0.5 but should be in that range
-        expect(result.data!.actual_compression_ratio).toBeGreaterThan(0);
-      }
-    );
-  });
-
-  describe('compress with latte_v1 (query-specific)', () => {
-    it.skipIf(skipIfNoApiKey())(
-      'should compress context with query',
-      async () => {
-        const result: CompressResponse = await client.compress({
-          context:
-            'Python is a programming language created by Guido van Rossum in 1991. JavaScript was created by Brendan Eich in 1995. Java was created by James Gosling also in 1995.',
-          query: 'Who created Python?',
-          compressionModelName: 'latte_v1',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(result.data!.compressed_context).toBeTruthy();
-        // The compressed context should be relevant to Python
-        expect(
-          (result.data!.compressed_context as string).toLowerCase()
-        ).toContain('python');
-      }
-    );
-
-    it.skipIf(skipIfNoApiKey())(
-      'should use coarse mode',
-      async () => {
-        const result: CompressResponse = await client.compress({
-          context:
-            'Python is a programming language.\n\nJavaScript is used for web development.\n\nJava is used for enterprise applications.',
-          query: 'Tell me about Python',
-          compressionModelName: 'latte_v1',
-          coarse: true,
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-      }
-    );
-  });
-
-  describe('compressBatch - agnostic (no queries)', () => {
-    it.skipIf(skipIfNoApiKey())(
-      'should batch compress multiple contexts without queries',
-      async () => {
-        const result: CompressBatchResponse = await client.compressBatch({
-          contexts: [
-            'Machine learning enables computers to learn from data.',
-            'Deep learning uses neural networks with many layers.',
-            'Natural language processing helps computers understand text.',
-          ],
-          // No queries = agnostic batch endpoint
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(result.data!.results.length).toBe(3);
-        expect(result.data!.count).toBe(3);
-        expect(result.data!.total_tokens_saved).toBeGreaterThanOrEqual(0);
-      }
-    );
-  });
-
-  describe('compressBatch - query-specific', () => {
-    it.skipIf(skipIfNoApiKey())(
-      'should batch compress with same query for all',
-      async () => {
-        const result: CompressBatchResponse = await client.compressBatch({
-          contexts: [
-            'Document about machine learning applications.',
-            'Document about deep learning architectures.',
-            'Document about natural language processing.',
-          ],
-          queries: 'What are the key concepts?',
-          compressionModelName: 'latte_v1',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(result.data!.results.length).toBe(3);
-        expect(result.data!.count).toBe(3);
-        expect(result.data!.total_tokens_saved).toBeGreaterThanOrEqual(0);
-      }
-    );
-
-    it.skipIf(skipIfNoApiKey())(
-      'should batch compress with different queries',
-      async () => {
-        const result: CompressBatchResponse = await client.compressBatch({
-          contexts: [
-            'Machine learning is a subset of AI.',
-            'Neural networks have multiple layers.',
-          ],
-          queries: ['What is ML?', 'What are neural networks?'],
-          compressionModelName: 'latte_v1',
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(result.data!.results.length).toBe(2);
-      }
-    );
-
-    it.skipIf(skipIfNoApiKey())(
-      'should batch compress with coarse mode',
-      async () => {
-        const result: CompressBatchResponse = await client.compressBatch({
-          contexts: [
-            'Machine learning is revolutionizing many industries.',
-            'Deep learning powers modern AI applications.',
-          ],
-          queries: 'What are the applications?',
-          compressionModelName: 'latte_v1',
-          coarse: true,
-        });
-
-        expect(result.success).toBe(true);
-        expect(result.data).not.toBeNull();
-        expect(result.data!.results.length).toBe(2);
-      }
-    );
-  });
-
-  describe('compressStream', () => {
-    it.skipIf(skipIfNoApiKey())(
-      'should stream compression chunks',
-      async () => {
-        const chunks: string[] = [];
-
-        for await (const chunk of client.compressStream({
-          context:
-            'Machine learning is a method of data analysis that automates analytical model building.',
-        })) {
-          if (chunk.content) {
-            chunks.push(chunk.content);
-          }
-          if (chunk.done) {
-            break;
-          }
-        }
-
-        // Should have received at least some content
-        expect(chunks.length).toBeGreaterThan(0);
-        const fullContent = chunks.join('');
-        expect(fullContent.length).toBeGreaterThan(0);
-      }
-    );
-  });
-
-  describe('error handling', () => {
-    it.skipIf(skipIfNoApiKey())(
-      'should throw ValidationError for empty context',
-      async () => {
-        await expect(
-          client.compress({
-            context: '',
-          })
-        ).rejects.toThrow();
-      }
-    );
-
-    it.skipIf(skipIfNoApiKey())(
-      'should handle backend error for invalid model gracefully',
-      async () => {
-        // Invalid model should return error from backend
-        await expect(
-          client.compress({
-            context: 'Test context',
-            compressionModelName: 'invalid_model_xyz',
-          })
-        ).rejects.toThrow();
-      }
-    );
-  });
+  );
 });

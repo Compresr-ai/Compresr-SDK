@@ -1,6 +1,4 @@
-/**
- * HTTP error handling utilities
- */
+/** HTTP error handling utilities. */
 import { STATUS_CODES } from '../config/constants.js';
 import {
   AuthenticationError,
@@ -10,25 +8,19 @@ import {
   ScopeError,
   ServerError,
   ValidationError,
-  // Budget & Credits
   InsufficientCreditsError,
   BudgetLimitError,
   DailyLimitError,
   ApiKeyBudgetError,
-  // Model & Input
   ModelNotFoundError,
   ContextWindowExceededError,
   ContentPolicyError,
-  // Service
   TimeoutError,
   ServiceUnavailableError,
   TargetAuthenticationError,
   type ErrorResponseData,
 } from '../errors/index.js';
 
-/**
- * Error body from API response
- */
 export interface ErrorBody {
   error?: string;
   detail?: string | Array<{ loc?: string[]; msg?: string }>;
@@ -38,9 +30,6 @@ export interface ErrorBody {
   code?: string;
 }
 
-/**
- * Convert ErrorBody to ErrorResponseData (normalizes detail to string)
- */
 function normalizeErrorBody(body: ErrorBody): Partial<ErrorResponseData> {
   let detail: string | undefined;
   
@@ -66,9 +55,6 @@ function normalizeErrorBody(body: ErrorBody): Partial<ErrorResponseData> {
   };
 }
 
-/**
- * Extract user-friendly error message from API response
- */
 function extractErrorMessage(body: ErrorBody): string {
   if (body.error) {
     return body.error;
@@ -93,13 +79,8 @@ function extractErrorMessage(body: ErrorBody): string {
   return 'Unknown error';
 }
 
-/**
- * Map error code from response body to appropriate error class
- * Returns null if code is not recognized (fall through to status-based handling)
- */
 function handleErrorByCode(code: string, msg: string, body: ErrorBody, normalized: Partial<ErrorResponseData>): CompresrError | null {
   switch (code) {
-    // Budget & Credits
     case 'insufficient_credits':
       return new InsufficientCreditsError(msg, undefined, undefined, normalized);
     case 'budget_limit_reached':
@@ -108,38 +89,26 @@ function handleErrorByCode(code: string, msg: string, body: ErrorBody, normalize
       return new DailyLimitError(msg, undefined, undefined, normalized);
     case 'api_key_budget_exceeded':
       return new ApiKeyBudgetError(msg, undefined, undefined, normalized);
-    
-    // Model & Input
     case 'model_not_found':
       return new ModelNotFoundError(msg, undefined, undefined, normalized);
     case 'context_window_exceeded':
       return new ContextWindowExceededError(msg, undefined, undefined, normalized);
     case 'content_policy_violation':
       return new ContentPolicyError(msg, undefined, normalized);
-    
-    // Service
     case 'timeout':
       return new TimeoutError(msg, undefined, normalized);
     case 'service_unavailable':
       return new ServiceUnavailableError(msg, undefined, body.retry_after, normalized);
     case 'target_authentication_error':
       return new TargetAuthenticationError(msg, undefined, normalized);
-    
-    // Auth & Permissions
     case 'authentication_error':
       return new AuthenticationError(`Authentication failed: ${msg}`, normalized);
     case 'scope_error':
       return new ScopeError(msg, undefined, normalized);
-    
-    // Resource
     case 'not_found':
       return new NotFoundError(msg, undefined, normalized);
-    
-    // Validation
     case 'validation_error':
       return new ValidationError(msg, body.field, normalized);
-    
-    // Rate limiting
     case 'rate_limit_exceeded':
       return new RateLimitError(msg, body.retry_after, normalized);
 
@@ -148,16 +117,10 @@ function handleErrorByCode(code: string, msg: string, body: ErrorBody, normalize
   }
 }
 
-/**
- * Map HTTP status code and body to appropriate error class
- * First checks error code in body, then falls back to HTTP status
- * @throws Always throws an appropriate CompresrError subclass
- */
 export function handleHttpError(status: number, body: ErrorBody): never {
   const msg = extractErrorMessage(body);
   const normalized = normalizeErrorBody(body);
 
-  // First, try to map by error code if present
   if (body.code) {
     const codeError = handleErrorByCode(body.code, msg, body, normalized);
     if (codeError) {
@@ -165,7 +128,6 @@ export function handleHttpError(status: number, body: ErrorBody): never {
     }
   }
 
-  // Fall back to status-based error handling
   switch (status) {
     case STATUS_CODES.UNAUTHORIZED:
       throw new AuthenticationError(
@@ -198,6 +160,14 @@ export function handleHttpError(status: number, body: ErrorBody): never {
     }
 
     default:
+      if (status === 503) {
+        throw new ServiceUnavailableError(
+          `Service temporarily unavailable: ${msg}`,
+          undefined,
+          body.retry_after,
+          normalized
+        );
+      }
       if (status >= 500) {
         throw new ServerError(
           `Server error: ${msg}. Please try again later or contact support.`,

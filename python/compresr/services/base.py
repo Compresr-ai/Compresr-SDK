@@ -1,89 +1,54 @@
-"""
-BaseCompressionClient - Abstract base class for compression services.
+"""Shared base for compression clients."""
 
-Contains shared logic for HTTP calls and response handling.
-Do not use directly - use CompressionClient or FilterClient.
-"""
-
-from typing import Generator, Optional, Tuple
+from typing import Generator, Optional
 
 from pydantic import ValidationError as PydanticValidationError
 
 from ..config import ENDPOINTS
 from ..exceptions import ValidationError
-from ..schemas import (
-    CompressRequest,
-    CompressResponse,
-    StreamChunk,
-)
+from ..schemas import CompressRequest, CompressResponse, StreamChunk
 from .proxy import HTTPClient
 
 
 class BaseCompressionClient(HTTPClient):
-    """
-    Abstract base class for compression clients.
-
-    Provides shared HTTP functionality and response handling.
-    Subclasses (CompressionClient, FilterClient) implement user-facing methods.
-    """
-
     def _build_request(
         self,
         context: str,
-        compression_model_name: str,
         query: Optional[str] = None,
+        compression_model_name: str = "latte_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
         heuristic_chunking: Optional[bool] = None,
         disable_placeholders: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
+        dynamic_min_ratio: Optional[float] = None,
+        dynamic_max_ratio: Optional[float] = None,
     ) -> CompressRequest:
-        """Build and validate a compression request.
-
-        Note: coarse, heuristic_chunking, disable_placeholders are only included
-        when query is provided (QS endpoint). Agnostic endpoint doesn't support them.
-        """
         try:
-            # Only include QS-specific params when using query-specific endpoint
-            # Agnostic endpoint doesn't support these parameters
-            effective_coarse = coarse if query is not None else None
-            effective_heuristic_chunking = heuristic_chunking if query is not None else None
-            effective_disable_placeholders = disable_placeholders if query is not None else None
-
             return CompressRequest(
                 context=context,
-                compression_model_name=compression_model_name,
                 query=query,
+                compression_model_name=compression_model_name,
                 target_compression_ratio=target_compression_ratio,
-                coarse=effective_coarse,
-                heuristic_chunking=effective_heuristic_chunking,
-                disable_placeholders=effective_disable_placeholders,
+                coarse=coarse,
+                heuristic_chunking=heuristic_chunking,
+                disable_placeholders=disable_placeholders,
+                dynamic=dynamic,
+                dynamic_min_ratio=dynamic_min_ratio,
+                dynamic_max_ratio=dynamic_max_ratio,
             )
         except PydanticValidationError as e:
             raise ValidationError(str(e)) from e
 
-    def _resolve_endpoints(self, model_name: str, query: Optional[str] = None) -> Tuple[str, str]:
-        """Resolve base and stream endpoints based on whether query is provided.
-
-        Returns:
-            (base_endpoint, stream_endpoint) tuple
-        """
-        if query is not None:
-            return ENDPOINTS.COMPRESS_QS, ENDPOINTS.COMPRESS_QS_STREAM
-        else:
-            return ENDPOINTS.COMPRESS_AGNOSTIC, ENDPOINTS.COMPRESS_AGNOSTIC_STREAM
-
-    def _do_request(self, endpoint: str, req: CompressRequest) -> CompressResponse:
-        """Execute compression request (sync)."""
-        data = self.post(endpoint, req.model_dump(exclude_none=True))
+    def _do_request(self, req: CompressRequest) -> CompressResponse:
+        data = self.post(ENDPOINTS.COMPRESS, req.model_dump(exclude_none=True))
         return CompressResponse.model_validate(data)
 
-    def _do_stream(self, endpoint: str, req: CompressRequest) -> Generator[StreamChunk, None, None]:
-        """Execute stream compression request (sync)."""
-        for content in self.stream(endpoint, req.model_dump(exclude_none=True)):
+    def _do_stream(self, req: CompressRequest) -> Generator[StreamChunk, None, None]:
+        for content in self.stream(ENDPOINTS.COMPRESS_STREAM, req.model_dump(exclude_none=True)):
             yield StreamChunk(content=content, done=False)
         yield StreamChunk(content="", done=True)
 
-    async def _do_request_async(self, endpoint: str, req: CompressRequest) -> CompressResponse:
-        """Execute compression request (async)."""
-        data = await self.post_async(endpoint, req.model_dump(exclude_none=True))
+    async def _do_compress_async(self, req: CompressRequest) -> CompressResponse:
+        data = await self.post_async(ENDPOINTS.COMPRESS, req.model_dump(exclude_none=True))
         return CompressResponse.model_validate(data)

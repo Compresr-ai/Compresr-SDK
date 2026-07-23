@@ -1,0 +1,152 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{TypeScript · LangChain Integration}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK · TypeScript}{LangChain Integration}{%
+    Auto-compress tool outputs in your LangChain.js agents. Cut tokens
+    30--70\%, keep answer quality, ship in one line of middleware.}
+
+% ===========================================================================
+\section{Why it matters}
+
+LangChain.js agents burn most of their tokens on \emph{tool outputs} —
+search results, scraped pages, database rows — that the model rereads on
+every turn. Compresr replaces each raw output with a query-aware,
+compressed version \emph{before} it enters the message state, so your KV
+cache, your prompt, and your bill all shrink. Drop it in, keep your agent
+exactly as is.
+
+% ===========================================================================
+\section{Install}
+
+\begin{shcode}
+npm install @compresr/sdk
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+\noindent Node.js 20+. Dual ESM + CJS build; the
+\cprInlineCode{@compresr/sdk/integrations/langchain} subpath needs
+\cprInlineCode{langchain>=1.0.0} as a peer (and any
+\cprInlineCode{@langchain/*} packages you already use).
+
+% ===========================================================================
+\section{Drop-in agent middleware}
+
+One import, one middleware entry. The agent code below is unchanged from
+the LangChain.js docs except for the highlighted line.
+
+\begin{tscode}
+import { createAgent } from 'langchain';
+import { compresrToolMiddleware } from '@compresr/sdk/integrations/langchain';
+
+const agent = createAgent({
+  model: 'openai:gpt-4o-mini',
+  tools: [webSearch],
+  middleware: [
+    compresrToolMiddleware({
+      apiKey: process.env.COMPRESR_API_KEY!,
+      queryArg: 'query',            // use args.query as the intent
+      targetCompressionRatio: 0.5,  // remove ~50% of tokens
+      minTokens: 200,               // skip short outputs
+    }),
+  ],
+});
+\end{tscode}
+
+\noindent That's it. The agent still sees every tool result, just shorter
+and focused on the current query. Fail-open by default: if the Compresr
+API is unreachable, the original output passes through and your agent
+keeps running.
+
+% ===========================================================================
+\section{Wrap a single tool}
+
+Prefer to compress just one noisy tool (e.g. a web scraper) inside an LCEL
+chain or LangGraph node? Use the wrapper — name, description, and schema
+are preserved.
+
+\begin{tscode}
+import { wrapToolWithCompression } from '@compresr/sdk/integrations/langchain';
+
+const compressedSearch = wrapToolWithCompression(rawSearch, {
+  apiKey: process.env.COMPRESR_API_KEY!,
+  queryArg: 'query',
+  targetCompressionRatio: 0.5,
+});
+\end{tscode}
+
+\noindent Also available: \cprInlineCode{compresrSummarizationMiddleware}
+(condenses conversation history at a token threshold) and
+\cprInlineCode{compresrPromptMiddleware} (enforces a hard prompt budget).
+For retriever-side compression, drop \cprInlineCode{CompresrExtractor}
+into a \cprInlineCode{ContextualCompressionRetriever}:
+
+\begin{tscode}
+import { CompresrExtractor } from '@compresr/sdk/integrations/langchain';
+import { ContextualCompressionRetriever } from 'langchain/retrievers/contextual_compression';
+
+const retriever = new ContextualCompressionRetriever({
+  baseRetriever: vectorStore.asRetriever({ k: 10 }),
+  baseCompressor: new CompresrExtractor({
+    apiKey: process.env.COMPRESR_API_KEY!,
+    targetCompressionRatio: 0.5,
+  }),
+});
+\end{tscode}
+
+% ===========================================================================
+\section{Key parameters}
+
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{@{}p{4.6cm} p{9.4cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default --- Description} \\
+\midrule
+\endhead
+
+\cprInlineCode{apiKey} & \emph{required} --- your Compresr API key. \\
+
+\cprInlineCode{targetCompressionRatio} & \cprInlineCode{0.5} --- values in
+$[0,1]$ remove that fraction of tokens; values $>1$ are an Nx factor
+(e.g.\ \cprInlineCode{3} for $3\times$ shorter). \\
+
+\cprInlineCode{minTokens} & \cprInlineCode{200} --- skip outputs shorter
+than this. Keeps small results untouched and fast. \\
+
+\cprInlineCode{queryArg} & \emph{undefined} --- name of the tool argument
+to use as the compression query (e.g.\ \cprInlineCode{'query'}). \\
+
+\cprInlineCode{query} & \emph{undefined} --- static query string, used
+when every call shares the same intent. \\
+
+\cprInlineCode{queryExtractor} & \emph{undefined} --- custom function to
+derive a query. Middleware receives
+\cprInlineCode{(toolCall, messages) => string | undefined};
+\cprInlineCode{wrapToolWithCompression} receives
+\cprInlineCode{(args) => string | undefined}. Return
+\cprInlineCode{undefined} to fall back to the default. \\
+
+\cprInlineCode{compressionModel} & \cprInlineCode{'latte\_v1'} ---
+query-aware default. Switch to \cprInlineCode{'latte\_v2'} for the
+faster variant. \\
+
+\cprInlineCode{coarse} & \emph{undefined} --- \cprInlineCode{true} for
+paragraph-level (faster), \cprInlineCode{false} for token-level
+(tighter). \\
+
+\cprInlineCode{allowTools} / \cprInlineCode{ignoreTools} & \emph{undefined}
+--- limit compression to (or exclude) specific tool names. \\
+
+\cprInlineCode{onError} & \cprInlineCode{'passthrough'} --- fail-open
+behaviour. Set to \cprInlineCode{'raise'} to fail-closed. \\
+
+\bottomrule
+\end{longtable}
+
+\vspace{0.4em}
+\noindent\textbf{Get started:} \cprInlineCode{npm install @compresr/sdk}
+\quad\textbullet\quad Docs and pricing at \texttt{compresr.ai}.
+
+\end{document}

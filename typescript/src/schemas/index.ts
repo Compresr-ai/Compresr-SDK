@@ -1,8 +1,3 @@
-/**
- * Schema exports
- */
-
-// Common
 export {
   BaseResponseSchema,
   StreamChunkSchema,
@@ -12,11 +7,8 @@ export {
   type HealthResponse,
 } from './common.js';
 
-// Compression
 export {
   CompressRequestSchema,
-  AgnosticBatchInputSchema,
-  AgnosticBatchRequestSchema,
   CompressBatchInputSchema,
   CompressBatchRequestSchema,
   CompressResultSchema,
@@ -25,8 +17,6 @@ export {
   CompressResponseSchema,
   CompressBatchResponseSchema,
   type CompressRequest,
-  type AgnosticBatchInput,
-  type AgnosticBatchRequest,
   type CompressBatchInput,
   type CompressBatchRequest,
   type CompressResult,

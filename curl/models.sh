@@ -16,4 +16,4 @@ BASE_URL="${COMPRESR_BASE_URL:-https://api.compresr.ai}"
 echo "Fetching available compression models..."
 echo ""
 
-curl -s "$BASE_URL/api/compress/question-agnostic/models" | jq .
+curl -s "$BASE_URL/api/compress/question-specific/models" | jq .

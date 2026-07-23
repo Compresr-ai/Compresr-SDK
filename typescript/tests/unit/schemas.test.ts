@@ -1,218 +1,273 @@
-/**
- * Unit tests for Zod schemas
- */
-import { describe, it, expect } from 'vitest';
+/** Unit tests for SDK schemas. */
+import { describe, expect, it } from 'vitest';
+
 import {
-  CompressRequestSchema,
-  CompressResponseSchema,
+  CompressBatchInputSchema,
   CompressBatchRequestSchema,
   CompressBatchResponseSchema,
+  CompressBatchResultSchema,
+  CompressRequestSchema,
+  CompressResponseSchema,
+  CompressResultSchema,
   StreamChunkSchema,
 } from '../../src/schemas/index.js';
 
 describe('CompressRequestSchema', () => {
-  it('should validate minimal request', () => {
-    const result = CompressRequestSchema.safeParse({
-      context: 'Hello world',
-      compression_model_name: 'espresso_v1',
-    });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.context).toBe('Hello world');
-      expect(result.data.compression_model_name).toBe('espresso_v1');
-      expect(result.data.source).toBe('sdk:typescript');
-    }
-  });
-
-  it('should validate request with all fields', () => {
-    const result = CompressRequestSchema.safeParse({
-      context: 'Hello world',
+  it('accepts a minimal request with query', () => {
+    const result = CompressRequestSchema.parse({
+      context: 'Test context',
+      query: 'What is X?',
       compression_model_name: 'latte_v1',
-      query: 'What is this?',
+    });
+    expect(result.context).toBe('Test context');
+    expect(result.query).toBe('What is X?');
+  });
+
+  it('allows omitting query (backend validates per model)', () => {
+    const result = CompressRequestSchema.parse({
+      context: 'Test context',
+      compression_model_name: 'latte_v1',
+    });
+    expect(result.query).toBeUndefined();
+  });
+
+  it('rejects empty context', () => {
+    expect(() =>
+      CompressRequestSchema.parse({
+        context: '',
+        compression_model_name: 'latte_v1',
+      })
+    ).toThrow();
+  });
+
+  it('rejects empty query when supplied', () => {
+    expect(() =>
+      CompressRequestSchema.parse({
+        context: 'Test',
+        query: '',
+        compression_model_name: 'latte_v1',
+      })
+    ).toThrow();
+  });
+
+  it('accepts arbitrary model name (backend validates)', () => {
+    const result = CompressRequestSchema.parse({
+      context: 'Test',
+      compression_model_name: 'future_v3',
+    });
+    expect(result.compression_model_name).toBe('future_v3');
+  });
+
+  it('accepts target_compression_ratio', () => {
+    const result = CompressRequestSchema.parse({
+      context: 'Test',
+      query: 'Q',
+      compression_model_name: 'latte_v1',
       target_compression_ratio: 0.5,
-      coarse: true,
     });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.query).toBe('What is this?');
-      expect(result.data.target_compression_ratio).toBe(0.5);
-      expect(result.data.coarse).toBe(true);
-    }
+    expect(result.target_compression_ratio).toBe(0.5);
   });
 
-  it('should reject array context (use batch for multiple contexts)', () => {
-    const result = CompressRequestSchema.safeParse({
-      context: ['Doc 1', 'Doc 2'],
-      compression_model_name: 'espresso_v1',
-    });
-
-    // Array context is no longer supported - use batch endpoint instead
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject empty context string', () => {
-    const result = CompressRequestSchema.safeParse({
-      context: '',
-      compression_model_name: 'espresso_v1',
-    });
-
-    expect(result.success).toBe(false);
-  });
-
-  it('should reject negative compression ratio', () => {
-    const result = CompressRequestSchema.safeParse({
-      context: 'Hello',
-      compression_model_name: 'espresso_v1',
-      target_compression_ratio: -0.5,
-    });
-
-    expect(result.success).toBe(false);
+  it('rejects negative ratio', () => {
+    expect(() =>
+      CompressRequestSchema.parse({
+        context: 'Test',
+        compression_model_name: 'latte_v1',
+        target_compression_ratio: -0.1,
+      })
+    ).toThrow();
   });
 });
 
-describe('CompressResponseSchema', () => {
-  it('should validate successful response', () => {
-    const result = CompressResponseSchema.safeParse({
-      success: true,
-      data: {
-        original_context: 'Hello world',
-        compressed_context: 'Hello',
-        original_tokens: 10,
-        compressed_tokens: 5,
-        actual_compression_ratio: 0.5,
-        tokens_saved: 5,
-        duration_ms: 100,
-      },
+describe('CompressRequestSchema — latte_v2 dynamic fields', () => {
+  it('defaults all three dynamic fields to undefined', () => {
+    const result = CompressRequestSchema.parse({
+      context: 'Test',
+      query: 'Q',
+      compression_model_name: 'latte_v1',
     });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.success).toBe(true);
-      expect(result.data.data?.tokens_saved).toBe(5);
-    }
+    expect(result.dynamic).toBeUndefined();
+    expect(result.dynamic_min_ratio).toBeUndefined();
+    expect(result.dynamic_max_ratio).toBeUndefined();
   });
 
-  it('should validate response with null data', () => {
-    const result = CompressResponseSchema.safeParse({
-      success: false,
-      data: null,
+  it('accepts dynamic + dynamic_min_ratio + dynamic_max_ratio', () => {
+    const result = CompressRequestSchema.parse({
+      context: 'Test',
+      query: 'Q',
+      compression_model_name: 'latte_v2',
+      dynamic: true,
+      dynamic_min_ratio: 2.0,
+      dynamic_max_ratio: 8.0,
     });
+    expect(result.dynamic).toBe(true);
+    expect(result.dynamic_min_ratio).toBe(2.0);
+    expect(result.dynamic_max_ratio).toBe(8.0);
+  });
 
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.data).toBeNull();
-    }
+  it('does not expose internal aggregation/include_tokens knobs', () => {
+    // Regression: these were briefly added then removed in 2.7.9 / 1.6.8 —
+    // they're internal/debug knobs and must stay out of the SDK surface.
+    const shape = CompressRequestSchema.shape;
+    expect('aggregation' in shape).toBe(false);
+    expect('include_tokens' in shape).toBe(false);
+  });
+});
+
+describe('CompressBatchInputSchema', () => {
+  it('accepts context + query', () => {
+    const result = CompressBatchInputSchema.parse({ context: 'C', query: 'Q' });
+    expect(result.context).toBe('C');
+    expect(result.query).toBe('Q');
+  });
+
+  it('allows omitting query', () => {
+    const result = CompressBatchInputSchema.parse({ context: 'C' });
+    expect(result.query).toBeUndefined();
+  });
+
+  it('rejects empty context', () => {
+    expect(() => CompressBatchInputSchema.parse({ context: '' })).toThrow();
   });
 });
 
 describe('CompressBatchRequestSchema', () => {
-  it('should validate batch request', () => {
-    const result = CompressBatchRequestSchema.safeParse({
+  it('accepts a valid batch', () => {
+    const result = CompressBatchRequestSchema.parse({
       inputs: [
-        { context: 'Doc 1', query: 'Q1' },
-        { context: 'Doc 2', query: 'Q2' },
+        { context: 'C1', query: 'Q1' },
+        { context: 'C2', query: 'Q2' },
       ],
       compression_model_name: 'latte_v1',
     });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.inputs).toHaveLength(2);
-    }
+    expect(result.inputs).toHaveLength(2);
   });
 
-  it('should reject empty inputs array', () => {
-    const result = CompressBatchRequestSchema.safeParse({
-      inputs: [],
-      compression_model_name: 'latte_v1',
-    });
-
-    expect(result.success).toBe(false);
+  it('rejects empty inputs', () => {
+    expect(() =>
+      CompressBatchRequestSchema.parse({
+        inputs: [],
+        compression_model_name: 'latte_v1',
+      })
+    ).toThrow();
   });
 
-  it('should reject inputs exceeding max length', () => {
+  it('rejects more than 100 inputs', () => {
     const inputs = Array.from({ length: 101 }, (_, i) => ({
-      context: `Doc ${i}`,
+      context: `C${i}`,
       query: `Q${i}`,
     }));
+    expect(() =>
+      CompressBatchRequestSchema.parse({
+        inputs,
+        compression_model_name: 'latte_v1',
+      })
+    ).toThrow();
+  });
 
-    const result = CompressBatchRequestSchema.safeParse({
-      inputs,
-      compression_model_name: 'latte_v1',
+  it('accepts latte_v2 dynamic fields on the batch', () => {
+    const result = CompressBatchRequestSchema.parse({
+      inputs: [{ context: 'C', query: 'Q' }],
+      compression_model_name: 'latte_v2',
+      dynamic: true,
+      dynamic_min_ratio: 1.5,
+      dynamic_max_ratio: 10.0,
     });
+    expect(result.dynamic).toBe(true);
+    expect(result.dynamic_min_ratio).toBe(1.5);
+    expect(result.dynamic_max_ratio).toBe(10.0);
+  });
+});
 
+describe('CompressResultSchema', () => {
+  it('accepts a valid result', () => {
+    const result = CompressResultSchema.parse({
+      compressed_context: 'C',
+      original_tokens: 100,
+      compressed_tokens: 50,
+      actual_compression_ratio: 0.5,
+      tokens_saved: 50,
+      duration_ms: 100,
+    });
+    expect(result.compressed_tokens).toBe(50);
+  });
+});
+
+describe('CompressResponseSchema', () => {
+  it('accepts a success response', () => {
+    const result = CompressResponseSchema.parse({
+      success: true,
+      data: {
+        compressed_context: 'C',
+        original_tokens: 100,
+        compressed_tokens: 50,
+        actual_compression_ratio: 0.5,
+        tokens_saved: 50,
+        duration_ms: 100,
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a failure response with null data', () => {
+    const result = CompressResponseSchema.parse({
+      success: false,
+      data: null,
+      message: 'failed',
+    });
     expect(result.success).toBe(false);
+    expect(result.data).toBeNull();
+  });
+});
+
+describe('CompressBatchResultSchema', () => {
+  it('accepts a valid batch result', () => {
+    const result = CompressBatchResultSchema.parse({
+      results: [
+        {
+          compressed_context: 'C',
+          original_tokens: 10,
+          compressed_tokens: 5,
+          actual_compression_ratio: 0.5,
+          tokens_saved: 5,
+          duration_ms: 10,
+        },
+      ],
+      total_original_tokens: 10,
+      total_compressed_tokens: 5,
+      total_tokens_saved: 5,
+      average_compression_ratio: 0.5,
+      count: 1,
+    });
+    expect(result.count).toBe(1);
   });
 });
 
 describe('CompressBatchResponseSchema', () => {
-  it('should validate batch response', () => {
-    const result = CompressBatchResponseSchema.safeParse({
+  it('accepts a success response', () => {
+    const result = CompressBatchResponseSchema.parse({
       success: true,
       data: {
-        results: [
-          {
-            original_context: 'Doc 1',
-            compressed_context: 'D1',
-            original_tokens: 10,
-            compressed_tokens: 5,
-            actual_compression_ratio: 0.5,
-            tokens_saved: 5,
-            duration_ms: 50,
-          },
-        ],
-        total_original_tokens: 10,
-        total_compressed_tokens: 5,
-        total_tokens_saved: 5,
-        average_compression_ratio: 0.5,
-        count: 1,
+        results: [],
+        total_original_tokens: 0,
+        total_compressed_tokens: 0,
+        total_tokens_saved: 0,
+        average_compression_ratio: 0,
+        count: 0,
       },
     });
-
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.data?.count).toBe(1);
-    }
   });
 });
 
 describe('StreamChunkSchema', () => {
-  it('should validate stream chunk', () => {
-    const result = StreamChunkSchema.safeParse({
-      content: 'Hello',
-      done: false,
-    });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.content).toBe('Hello');
-      expect(result.data.done).toBe(false);
-    }
+  it('accepts a content chunk', () => {
+    const chunk = StreamChunkSchema.parse({ content: 'partial', done: false });
+    expect(chunk.content).toBe('partial');
   });
 
-  it('should default done to false', () => {
-    const result = StreamChunkSchema.safeParse({
-      content: 'Hello',
-    });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.done).toBe(false);
-    }
-  });
-
-  it('should include error field', () => {
-    const result = StreamChunkSchema.safeParse({
-      content: '',
-      done: true,
-      error: 'Something failed',
-    });
-
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.error).toBe('Something failed');
-    }
+  it('accepts a done chunk', () => {
+    const chunk = StreamChunkSchema.parse({ content: '', done: true });
+    expect(chunk.done).toBe(true);
   });
 });

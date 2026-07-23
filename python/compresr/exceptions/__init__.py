@@ -5,13 +5,14 @@ Exact copies of exceptions from backend.
 Single source of truth maintained in backend.
 """
 
-from .exceptions import (  # Response models; Exception classes
+from .exceptions import (
     ApiKeyBudgetError,
     AuthenticationError,
     AuthenticationErrorResponse,
     BudgetLimitError,
+    CompresrConnectionError,
     CompresrError,
-    ConnectionError,
+    CompresrTimeoutError,
     ConnectionErrorResponse,
     ContentPolicyError,
     ContextWindowExceededError,
@@ -29,13 +30,16 @@ from .exceptions import (  # Response models; Exception classes
     ServerErrorResponse,
     ServiceUnavailableError,
     TargetAuthenticationError,
-    TimeoutError,
     ValidationError,
     ValidationErrorResponse,
 )
 
+# Deprecated: shadows builtin, will be removed in 3.0
+ConnectionError = CompresrConnectionError
+# Deprecated: shadows builtin, will be removed in 3.0
+TimeoutError = CompresrTimeoutError
+
 __all__ = [
-    # Response models
     "ErrorResponse",
     "ValidationErrorResponse",
     "AuthenticationErrorResponse",
@@ -44,7 +48,6 @@ __all__ = [
     "ServerErrorResponse",
     "NotFoundErrorResponse",
     "ConnectionErrorResponse",
-    # Exception classes
     "CompresrError",
     "AuthenticationError",
     "TargetAuthenticationError",
@@ -53,17 +56,14 @@ __all__ = [
     "ScopeError",
     "ServerError",
     "NotFoundError",
-    "ConnectionError",
-    # Budget & Credits
+    "CompresrConnectionError",
     "InsufficientCreditsError",
     "BudgetLimitError",
     "DailyLimitError",
     "ApiKeyBudgetError",
-    # Model & Input
     "ModelNotFoundError",
     "ContextWindowExceededError",
     "ContentPolicyError",
-    # Service
-    "TimeoutError",
+    "CompresrTimeoutError",
     "ServiceUnavailableError",
 ]

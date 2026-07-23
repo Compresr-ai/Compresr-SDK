@@ -8,10 +8,6 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-# =============================================================================
-# Response Models (for documentation)
-# =============================================================================
-
 
 class ErrorResponse(BaseModel):
     """Generic error response."""
@@ -78,11 +74,6 @@ class ConnectionErrorResponse(BaseModel):
     success: bool = False
     error: str = "Connection failed"
     code: str = "connection_error"
-
-
-# =============================================================================
-# Exception Classes
-# =============================================================================
 
 
 class CompresrError(Exception):
@@ -161,7 +152,7 @@ class NotFoundError(CompresrError):
         self.resource = resource
 
 
-class ConnectionError(CompresrError):
+class CompresrConnectionError(CompresrError):
     """Connection to service failed."""
 
     def __init__(
@@ -169,11 +160,6 @@ class ConnectionError(CompresrError):
     ):
         super().__init__(message, response_data, "connection_error")
         self.service = service
-
-
-# =============================================================================
-# Budget & Credits Errors
-# =============================================================================
 
 
 class InsufficientCreditsError(CompresrError):
@@ -236,11 +222,6 @@ class ApiKeyBudgetError(CompresrError):
         self.api_key_used = api_key_used
 
 
-# =============================================================================
-# Model & Input Errors
-# =============================================================================
-
-
 class ModelNotFoundError(CompresrError):
     """Requested model does not exist."""
 
@@ -284,12 +265,7 @@ class ContentPolicyError(CompresrError):
         self.provider = provider
 
 
-# =============================================================================
-# Service Errors
-# =============================================================================
-
-
-class TimeoutError(CompresrError):
+class CompresrTimeoutError(CompresrError):
     """Request timed out."""
 
     def __init__(

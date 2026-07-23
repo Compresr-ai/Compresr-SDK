@@ -1,0 +1,198 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{TypeScript · LlamaIndex Integration}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK · TypeScript}{LlamaIndex Integration}{%
+    Compress RAG context and chat memory inside LlamaIndex.TS with
+    drop-in components. Smaller prompts, lower LLM spend, faster
+    responses --- no changes to your retrievers or vector store.}
+
+% ===========================================================================
+\section{Install}
+
+\begin{shcode}
+npm install @compresr/sdk llamaindex
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+\cprInlineCode{llamaindex} is declared as an optional peer dependency
+(\cprInlineCode{>=0.8.0}) and is only required if you use this
+integration. Node.js 20+.
+
+\begin{tscode}
+import {
+  CompresrNodePostprocessor,
+  CompresrMemoryBlock,
+  wrapToolWithCompresr,
+} from '@compresr/sdk/integrations/llamaindex';
+\end{tscode}
+
+% ===========================================================================
+\section{Drop-in node postprocessor}
+
+Add \cprInlineCode{CompresrNodePostprocessor} to
+\cprInlineCode{asQueryEngine()} and every retrieved node is rewritten
+with query-aware compression before the response synthesizer sees it.
+The user query is read automatically from the query engine's
+\cprInlineCode{QueryBundle}.
+
+\begin{tscode}
+import { VectorStoreIndex, Document } from 'llamaindex';
+import { CompresrNodePostprocessor }
+  from '@compresr/sdk/integrations/llamaindex';
+
+const index = await VectorStoreIndex.fromDocuments(
+  [new Document({ text: longText })],
+);
+
+const compresrPp = new CompresrNodePostprocessor({
+  apiKey: process.env.COMPRESR_API_KEY!,
+  compressionModel: 'latte_v1',     // query-aware (default)
+  targetCompressionRatio: 0.5,      // remove ~50% of tokens per node
+  minTokens: 200,                   // skip short nodes
+});
+
+const queryEngine = index.asQueryEngine({
+  similarityTopK: 10,
+  nodePostprocessors: [compresrPp],
+});
+
+const answer = await queryEngine.query({
+  query: 'What did the customer say about enterprise pricing?',
+});
+\end{tscode}
+
+Supports absolute output budgets via \cprInlineCode{targetToken}.
+Fail-open by default: if the Compresr API is unavailable, your pipeline
+continues with the original nodes.
+
+% ===========================================================================
+\section{Memory block}
+
+Plug \cprInlineCode{CompresrMemoryBlock} into the LlamaIndex.TS
+\cprInlineCode{Memory} API to shrink chat history in place --- no extra
+LLM summarization call, no dropped messages.
+
+\begin{tscode}
+import { Memory } from 'llamaindex';
+import { CompresrMemoryBlock }
+  from '@compresr/sdk/integrations/llamaindex';
+
+const memory = new Memory({
+  tokenLimit: 8_000,
+  memoryBlocks: [
+    new CompresrMemoryBlock({
+      apiKey: process.env.COMPRESR_API_KEY!,
+      targetToken: 2_000,    // output budget in tokens
+      minTokens: 200,
+    }),
+  ],
+});
+\end{tscode}
+
+% ===========================================================================
+\section{Tool wrapper}
+
+Wrap any \cprInlineCode{FunctionTool} so its string return value is
+compressed before reaching the agent. Metadata (name, description,
+schema) is preserved; non-string returns pass through unchanged.
+
+\begin{tscode}
+import { FunctionTool } from 'llamaindex';
+import { wrapToolWithCompresr }
+  from '@compresr/sdk/integrations/llamaindex';
+
+const search = FunctionTool.from(
+  async ({ query }: { query: string }) => fetchCRM(query),
+  {
+    name: 'search_crm',
+    description: 'Search the CRM for customer notes',
+    parameters: {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query'],
+    },
+  },
+);
+
+const wrapped = wrapToolWithCompresr(search, {
+  apiKey: process.env.COMPRESR_API_KEY!,
+  targetCompressionRatio: 0.5,
+  queryArg: 'query',   // use args.query as the compression query
+});
+\end{tscode}
+
+Share one \cprInlineCode{CompressionClient} across components to pool
+HTTP transport and apply a single timeout / retry config:
+
+\begin{tscode}
+import { CompressionClient } from '@compresr/sdk';
+
+const client = new CompressionClient({
+  apiKey: process.env.COMPRESR_API_KEY!,
+});
+
+const pp      = new CompresrNodePostprocessor({ client, targetCompressionRatio: 0.5 });
+const memory  = new CompresrMemoryBlock({ client, targetToken: 2_000 });
+const wrapped = wrapToolWithCompresr(search, { client, queryArg: 'query' });
+\end{tscode}
+
+% ===========================================================================
+\section{Key parameters}
+
+\renewcommand{\arraystretch}{1.2}
+
+\begin{longtable}{@{}p{4.0cm} p{2.4cm} p{7.7cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+
+\cprInlineCode{apiKey} & --- &
+Your Compresr API key. Required unless you pass \cprInlineCode{client}. \\
+
+\cprInlineCode{client} & \emph{undefined} &
+Share a single \cprInlineCode{CompressionClient} across the
+postprocessor, memory block, and tool wrappers for pooled transport,
+custom timeouts, and proxy / mTLS setups. \\
+
+\cprInlineCode{baseUrl} & \emph{undefined} &
+Override the Compresr API endpoint — for self-hosted deployments and
+Gateway routing. \\
+
+\cprInlineCode{compressionModel} & \cprInlineCode{'latte\_v1'} &
+\cprInlineCode{latte\_v1} (default, query-aware) or
+\cprInlineCode{latte\_v2} (faster variant). \\
+
+\cprInlineCode{targetCompressionRatio} & \cprInlineCode{0.5} &
+$[0,1]$ = fraction of tokens to remove (0.5 = remove $\sim$50\%).
+$>1$ = Nx factor (4 = $\sim$4x smaller). \\
+
+\cprInlineCode{targetToken} & \cprInlineCode{undefined} &
+Absolute output token budget per node or buffer. When set, overrides
+\cprInlineCode{targetCompressionRatio}. Effective ratio is computed as
+$\sim$\,\cprInlineCode{avgNodeTokens / targetToken} and clamped to
+$\geq 1$, so values larger than the typical node size are a no-op. \\
+
+\cprInlineCode{minTokens} & \cprInlineCode{200} &
+Skip compression when input is below this threshold. \\
+
+\cprInlineCode{coarse} & \cprInlineCode{undefined} &
+\cprInlineCode{true} = paragraph-level (faster).
+\cprInlineCode{false} = token-level (finer). \\
+
+\cprInlineCode{query} / \cprInlineCode{queryArg} /
+\cprInlineCode{queryExtractor} & \cprInlineCode{undefined} &
+Override or extract the compression query (tool wrapper). Defaults
+lift \cprInlineCode{query}, \cprInlineCode{question}, or similar args
+automatically. \\
+
+\cprInlineCode{onError} & \cprInlineCode{'passthrough'} &
+\cprInlineCode{'passthrough'} = log and return original content on
+failure. \cprInlineCode{'raise'} = propagate. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

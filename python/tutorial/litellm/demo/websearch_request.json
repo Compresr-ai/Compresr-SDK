@@ -1,0 +1,26 @@
+{
+  "model": "demo-model",
+  "messages": [
+    { "role": "system", "content": "You are a helpful research assistant. Use tools when needed and cite sources." },
+    { "role": "user", "content": "Which 2026 EVs have over 400 miles of EPA range, and roughly what do they cost?" },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_websearch_1",
+          "type": "function",
+          "function": {
+            "name": "web_search",
+            "arguments": "{\"query\":\"2026 electric vehicles over 400 miles EPA range and pricing\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_websearch_1",
+      "content": "WEB_SEARCH RESULTS (9 hits) for query: '2026 electric vehicles over 400 miles EPA range and pricing'\n\n[1] Electric Car Range and Price Comparison 2026 - Coltura (coltura.org/electric-car-battery-range): A maintained comparison table of every battery-electric vehicle sold in the US for the 2026 model year, listing EPA combined range, starting MSRP, battery capacity in kWh, DC fast-charge peak power, and EPA efficiency in mi/kWh. The site notes that the average EPA range across all 2026 BEVs is now about 290 miles, up from 247 two years ago, and that only a small number of models clear the 400-mile bar. Methodology, last-updated date, and affiliate disclosures are described at length.\n\n[2] 300 Miles Of EV Range Is The New Normal. Is 400 Next? - InsideEVs (insideevs.com/features/790876): Long editorial arguing that 300 miles has become the table-stakes figure for new EVs and that 400 miles is the next psychological threshold. Discusses battery chemistry trends (LFP vs NMC), the diminishing returns of adding kWh because of added mass, aerodynamic drag, and how EPA test cycles differ from real-world highway driving. Includes interview quotes from three engineers and a long tangent on heat-pump efficiency in winter.\n\n[3] Edmunds Tested: Electric Car Range and Consumption - Edmunds (edmunds.com/car-news): Edmunds runs its own real-world range loop and frequently finds cars beat or miss their EPA numbers; the article compares EPA vs Edmunds-tested range for dozens of vehicles and explains the test route, ambient-temperature controls, and tire-pressure protocol. Mostly methodology and historical results going back to 2019.\n\n[4] Best Affordable EVs With 300+ Mile Range (US Pricing) - ElectricCarsReport: Focuses on the sub-$50k segment. Lead example is the Mercedes-Benz Electric CLA topping the under-$50k category at 374 miles EPA starting at $48,600. Lists ten more affordable options between 300-380 miles. Does not include any 400-mile cars.\n\n[5] Best Electric Cars 2026 (Tested Rankings + Real Costs) - DriveAuthority: Subjective ranked list weighting ride quality, infotainment, and charging curve, not just range. Range is one of seven scoring factors. Long preamble about scoring methodology.\n\n[6] Longest Range Electric Cars in 2026: Ranked by EPA Miles - Motorwatt: A pure range leaderboard. The six models over 400 miles EPA for 2026: Lucid Air Grand Touring 512 mi; Chevrolet Silverado EV 493 mi; Cadillac Escalade IQ 465 mi; GMC Sierra EV 460 mi; Lucid Gravity 450 mi; Rivian R1T 420 mi. All start above $55,000. Below them sit a cluster of 350-399 mile cars.\n\n[7] 10 Most Affordable Electric Cars With 300 Miles of Range or More - EVChargingStations: Budget-oriented listicle, nothing above 400 miles, lots of charging-network advertising interspersed.\n\n[8] Electric Cars With the Longest Range - Cars.com: General evergreen guide updated for 2026, repeats the Lucid Air as the range leader and gives buying advice, financing tips, and a FAQ about battery degradation warranties.\n\n[9] Electric Cars With the Longest Range in 2026 - U.S. News: Editorial top-ten with photos; notes the Lucid Air at 512 miles and the Lucid Gravity SUV at 450 miles, plus the three full-size trucks/SUVs from GM and the Rivian R1T. Pricing called out as a downside; all over $55k. Includes dealer-incentive commentary and a note that the Escalade IQ can exceed $130,000 as equipped."
+    }
+  ]
+}

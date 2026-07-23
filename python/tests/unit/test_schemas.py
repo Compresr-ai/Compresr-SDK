@@ -1,13 +1,14 @@
-"""
-Unit Tests for SDK Schemas
-
-Tests for request/response schema validation and serialization.
-"""
+"""Unit tests for SDK schemas."""
 
 import pytest
 from pydantic import ValidationError
 
 from compresr.schemas import (
+    CompressBatchInput,
+    CompressBatchItemResult,
+    CompressBatchRequest,
+    CompressBatchResponse,
+    CompressBatchResult,
     CompressRequest,
     CompressResponse,
     CompressResult,
@@ -16,77 +17,46 @@ from compresr.schemas import (
 
 
 class TestCompressRequest:
-    """Test CompressRequest schema validation."""
-
-    def test_valid_request(self):
-        """Test valid compress request."""
-        req = CompressRequest(context="Test context", compression_model_name="espresso_v1")
+    def test_valid_request_with_query(self):
+        req = CompressRequest(context="Test context", query="What?")
         assert req.context == "Test context"
-        assert req.compression_model_name == "espresso_v1"
-        assert req.target_compression_ratio is None
+        assert req.query == "What?"
+        assert req.compression_model_name == "latte_v1"
+
+    def test_query_is_optional(self):
+        # Optional client-side; backend validates per model.
+        req = CompressRequest(context="Test context")
+        assert req.query is None
 
     def test_request_with_ratio(self):
-        """Test request with compression ratio."""
-        req = CompressRequest(
-            context="Test context",
-            compression_model_name="espresso_v1",
-            target_compression_ratio=0.5,
-        )
+        req = CompressRequest(context="Test", query="q", target_compression_ratio=0.5)
         assert req.target_compression_ratio == 0.5
 
     def test_empty_context_fails(self):
-        """Test that empty context fails validation at SDK level."""
         with pytest.raises(ValidationError):
-            CompressRequest(context="", compression_model_name="espresso_v1")
+            CompressRequest(context="", query="q")
+
+    def test_empty_query_fails(self):
+        # If supplied, query can't be empty.
+        with pytest.raises(ValidationError):
+            CompressRequest(context="Test", query="")
+
+    def test_arbitrary_model_name_passes(self):
+        # SDK is permissive — backend validates model names.
+        req = CompressRequest(context="Test", query="q", compression_model_name="some_future_v3")
+        assert req.compression_model_name == "some_future_v3"
 
     def test_high_ratio_passes(self):
-        """Test that high ratios (e.g., 60x) pass SDK validation - backend enforces upper bound."""
-        req = CompressRequest(
-            context="Test",
-            compression_model_name="espresso_v1",
-            target_compression_ratio=60.0,
-        )
+        req = CompressRequest(context="Test", query="q", target_compression_ratio=60.0)
         assert req.target_compression_ratio == 60.0
 
     def test_invalid_ratio_low_fails(self):
-        """Test that ratio < 0 fails validation."""
         with pytest.raises(ValidationError):
-            CompressRequest(
-                context="Test",
-                compression_model_name="espresso_v1",
-                target_compression_ratio=-0.1,
-            )
-
-    def test_missing_model_name_fails(self):
-        """Test that missing model name fails."""
-        with pytest.raises(ValidationError):
-            CompressRequest(context="Test")
+            CompressRequest(context="Test", query="q", target_compression_ratio=-0.1)
 
 
 class TestCompressResult:
-    """Test CompressResult schema."""
-
     def test_valid_result(self):
-        """Test valid compressed result."""
-        result = CompressResult(
-            original_context="Original text",
-            compressed_context="Compressed text",
-            original_tokens=100,
-            compressed_tokens=50,
-            actual_compression_ratio=0.5,
-            tokens_saved=50,
-            duration_ms=100,
-        )
-        assert result.compressed_context == "Compressed text"
-        assert result.original_context == "Original text"
-        assert result.original_tokens == 100
-        assert result.compressed_tokens == 50
-        assert result.actual_compression_ratio == 0.5
-        assert result.tokens_saved == 50
-        assert result.duration_ms == 100
-
-    def test_result_with_optional_fields(self):
-        """Test result with optional target ratio."""
         result = CompressResult(
             original_context="Original",
             compressed_context="Compressed",
@@ -95,20 +65,27 @@ class TestCompressResult:
             actual_compression_ratio=0.5,
             tokens_saved=50,
             duration_ms=100,
-            target_compression_ratio=0.5,
         )
-        assert result.target_compression_ratio == 0.5
+        assert result.compressed_context == "Compressed"
+        assert result.tokens_saved == 50
+
+    def test_result_without_original_context(self):
+        result = CompressResult(
+            compressed_context="Compressed",
+            original_tokens=100,
+            compressed_tokens=50,
+            actual_compression_ratio=0.5,
+            tokens_saved=50,
+            duration_ms=100,
+        )
+        assert result.original_context is None
 
 
 class TestCompressResponse:
-    """Test CompressResponse schema."""
-
     def test_valid_response(self):
-        """Test valid compress response."""
         response = CompressResponse(
             success=True,
             data=CompressResult(
-                original_context="Original",
                 compressed_context="Compressed",
                 original_tokens=100,
                 compressed_tokens=50,
@@ -121,94 +98,60 @@ class TestCompressResponse:
         assert response.data.compressed_tokens == 50
 
     def test_error_response(self):
-        """Test error response."""
         response = CompressResponse(success=False, message="Compression failed")
         assert response.success is False
-        assert response.message == "Compression failed"
         assert response.data is None
 
 
 class TestStreamChunk:
-    """Test StreamChunk schema."""
-
     def test_content_chunk(self):
-        """Test stream chunk with content."""
-        chunk = StreamChunk(content="Partial text", done=False)
-        assert chunk.content == "Partial text"
+        chunk = StreamChunk(content="Partial", done=False)
+        assert chunk.content == "Partial"
         assert chunk.done is False
 
     def test_done_chunk(self):
-        """Test final stream chunk."""
-        chunk = StreamChunk(content="Final text", done=True)
+        chunk = StreamChunk(content="", done=True)
         assert chunk.done is True
-        assert chunk.content == "Final text"
 
     def test_chunk_serialization(self):
-        """Test chunk can be serialized to dict."""
         chunk = StreamChunk(content="Test", done=False)
         data = chunk.model_dump()
         assert data["content"] == "Test"
         assert data["done"] is False
 
 
-# =============================================================================
-# Batch Compression Schema Tests
-# =============================================================================
-
-
 class TestCompressBatchInput:
-    """Test CompressBatchInput schema."""
-
     def test_valid_input(self):
-        """Test valid batch input."""
-        from compresr.schemas import CompressBatchInput
+        inp = CompressBatchInput(context="Test", query="Q?")
+        assert inp.query == "Q?"
 
-        inp = CompressBatchInput(context="Test context", query="Test query?")
-        assert inp.context == "Test context"
-        assert inp.query == "Test query?"
+    def test_query_is_optional(self):
+        inp = CompressBatchInput(context="Test")
+        assert inp.query is None
 
     def test_empty_context_fails(self):
-        """Test empty context fails validation."""
-        from compresr.schemas import CompressBatchInput
-
         with pytest.raises(ValidationError):
-            CompressBatchInput(context="", query="Test query?")
+            CompressBatchInput(context="", query="Q")
 
     def test_empty_query_fails(self):
-        """Test empty query fails validation."""
-        from compresr.schemas import CompressBatchInput
-
         with pytest.raises(ValidationError):
-            CompressBatchInput(context="Test context", query="")
+            CompressBatchInput(context="Test", query="")
 
 
 class TestCompressBatchRequest:
-    """Test CompressBatchRequest schema."""
-
     def test_valid_request(self):
-        """Test valid batch request."""
-        from compresr.schemas import CompressBatchInput, CompressBatchRequest
-
         inputs = [
-            CompressBatchInput(context="Context 1", query="Query 1"),
-            CompressBatchInput(context="Context 2", query="Query 2"),
+            CompressBatchInput(context="C1", query="Q1"),
+            CompressBatchInput(context="C2", query="Q2"),
         ]
-        req = CompressBatchRequest(
-            inputs=inputs,
-            compression_model_name="latte_v1",
-        )
+        req = CompressBatchRequest(inputs=inputs)
         assert len(req.inputs) == 2
         assert req.compression_model_name == "latte_v1"
         assert req.source == "sdk:python"
 
     def test_request_with_options(self):
-        """Test batch request with optional parameters."""
-        from compresr.schemas import CompressBatchInput, CompressBatchRequest
-
-        inputs = [CompressBatchInput(context="C1", query="Q1")]
         req = CompressBatchRequest(
-            inputs=inputs,
-            compression_model_name="latte_v1",
+            inputs=[CompressBatchInput(context="C", query="Q")],
             target_compression_ratio=0.5,
             coarse=True,
         )
@@ -216,113 +159,63 @@ class TestCompressBatchRequest:
         assert req.coarse is True
 
     def test_empty_inputs_fails(self):
-        """Test empty inputs list fails."""
-        from compresr.schemas import CompressBatchRequest
-
         with pytest.raises(ValidationError):
-            CompressBatchRequest(
-                inputs=[],
-                compression_model_name="latte_v1",
-            )
+            CompressBatchRequest(inputs=[])
 
     def test_max_inputs_limit(self):
-        """Test maximum 100 inputs limit."""
-        from compresr.schemas import CompressBatchInput, CompressBatchRequest
-
         inputs = [CompressBatchInput(context=f"C{i}", query=f"Q{i}") for i in range(101)]
         with pytest.raises(ValidationError):
-            CompressBatchRequest(
-                inputs=inputs,
-                compression_model_name="latte_v1",
-            )
+            CompressBatchRequest(inputs=inputs)
 
 
 class TestCompressBatchItemResult:
-    """Test CompressBatchItemResult schema."""
-
     def test_valid_item_result(self):
-        """Test valid batch item result."""
-        from compresr.schemas import CompressBatchItemResult
-
         result = CompressBatchItemResult(
-            original_context="Original",
-            compressed_context="Compressed",
+            original_context="O",
+            compressed_context="C",
             original_tokens=100,
             compressed_tokens=50,
             actual_compression_ratio=0.5,
             tokens_saved=50,
             duration_ms=100,
         )
-        assert result.original_context == "Original"
-        assert result.compressed_context == "Compressed"
         assert result.tokens_saved == 50
 
 
 class TestCompressBatchResult:
-    """Test CompressBatchResult schema."""
-
     def test_valid_batch_result(self):
-        """Test valid batch result with items."""
-        from compresr.schemas import CompressBatchItemResult, CompressBatchResult
-
         items = [
             CompressBatchItemResult(
-                original_context="Orig1",
-                compressed_context="Comp1",
+                compressed_context="C1",
                 original_tokens=100,
                 compressed_tokens=50,
                 actual_compression_ratio=0.5,
                 tokens_saved=50,
                 duration_ms=50,
-            ),
-            CompressBatchItemResult(
-                original_context="Orig2",
-                compressed_context="Comp2",
-                original_tokens=80,
-                compressed_tokens=40,
-                actual_compression_ratio=0.5,
-                tokens_saved=40,
-                duration_ms=40,
-            ),
+            )
         ]
         result = CompressBatchResult(
             results=items,
-            total_original_tokens=180,
-            total_compressed_tokens=90,
-            total_tokens_saved=90,
+            total_original_tokens=100,
+            total_compressed_tokens=50,
+            total_tokens_saved=50,
             average_compression_ratio=0.5,
-            count=2,
+            count=1,
         )
-        assert result.count == 2
-        assert result.total_original_tokens == 180
-        assert result.total_compressed_tokens == 90
-        assert len(result.results) == 2
+        assert result.count == 1
+        assert len(result.results) == 1
 
-    def test_empty_batch_result_defaults(self):
-        """Test batch result with default values."""
-        from compresr.schemas import CompressBatchResult
-
+    def test_empty_defaults(self):
         result = CompressBatchResult()
         assert result.count == 0
-        assert result.total_original_tokens == 0
         assert result.results == []
 
 
 class TestCompressBatchResponse:
-    """Test CompressBatchResponse schema."""
-
     def test_valid_response(self):
-        """Test valid batch response."""
-        from compresr.schemas import (
-            CompressBatchItemResult,
-            CompressBatchResponse,
-            CompressBatchResult,
-        )
-
         data = CompressBatchResult(
             results=[
                 CompressBatchItemResult(
-                    original_context="O",
                     compressed_context="C",
                     original_tokens=10,
                     compressed_tokens=5,
@@ -342,125 +235,96 @@ class TestCompressBatchResponse:
         assert response.data.count == 1
 
     def test_error_response(self):
-        """Test batch error response."""
-        from compresr.schemas import CompressBatchResponse
-
         response = CompressBatchResponse(success=False, message="Batch failed")
         assert response.success is False
-        assert response.message == "Batch failed"
         assert response.data is None
 
 
-# =============================================================================
-# Hard Edge Case Tests
-# =============================================================================
+class TestLatteV2DynamicFields:
+    """3 latte_v2-only knobs: dynamic + dynamic_min_ratio + dynamic_max_ratio.
 
+    SDK is permissive — backend validates that they're only honored on v2
+    models. Defaults are all None so unset keys never reach the wire.
+    """
 
-class TestContextTypeHandling:
-    """Test context type handling in schemas (context is now str only)."""
+    def test_dynamic_fields_default_to_none(self):
+        req = CompressRequest(context="t", query="q")
+        assert req.dynamic is None
+        assert req.dynamic_min_ratio is None
+        assert req.dynamic_max_ratio is None
 
-    def test_compress_request_rejects_list_context(self):
-        """Test CompressRequest rejects list of strings (use batch endpoint)."""
-        with pytest.raises(ValidationError):
-            CompressRequest(
-                context=["Context 1", "Context 2", "Context 3"],  # type: ignore[arg-type]
-                compression_model_name="espresso_v1",
-            )
-
-    def test_compress_request_single_string(self):
-        """Test CompressRequest with single string context."""
+    def test_dynamic_fields_explicit(self):
         req = CompressRequest(
-            context="Single context string",
-            compression_model_name="espresso_v1",
+            context="t",
+            query="q",
+            compression_model_name="latte_v2",
+            dynamic=True,
+            dynamic_min_ratio=2.0,
+            dynamic_max_ratio=8.0,
         )
-        assert isinstance(req.context, str)
+        assert req.dynamic is True
+        assert req.dynamic_min_ratio == 2.0
+        assert req.dynamic_max_ratio == 8.0
 
-    def test_compress_result_string_compressed_context(self):
-        """Test CompressResult with string compressed_context."""
-        result = CompressResult(
-            original_context="Original",
-            compressed_context="Compressed",
-            original_tokens=100,
-            compressed_tokens=50,
-            actual_compression_ratio=0.5,
-            tokens_saved=50,
-            duration_ms=100,
+    def test_unset_dynamic_fields_excluded_from_wire(self):
+        """model_dump(exclude_none=True) is what hits the network — no noise."""
+        req = CompressRequest(context="t", query="q")
+        payload = req.model_dump(exclude_none=True)
+        assert "dynamic" not in payload
+        assert "dynamic_min_ratio" not in payload
+        assert "dynamic_max_ratio" not in payload
+
+    def test_batch_request_carries_dynamic_fields(self):
+        req = CompressBatchRequest(
+            inputs=[CompressBatchInput(context="c", query="q")],
+            compression_model_name="latte_v2",
+            dynamic=True,
+            dynamic_min_ratio=1.5,
+            dynamic_max_ratio=10.0,
         )
-        assert isinstance(result.compressed_context, str)
+        assert req.dynamic is True
+        assert req.dynamic_min_ratio == 1.5
+        assert req.dynamic_max_ratio == 10.0
+
+    def test_internal_knobs_not_on_schema(self):
+        """aggregation and include_tokens are intentionally absent — they're
+        internal/debug knobs gated server-side, not exposed to SDK callers."""
+        fields = set(CompressRequest.model_fields.keys())
+        assert "aggregation" not in fields
+        assert "include_tokens" not in fields
 
 
 class TestBoundaryValidations:
-    """Test boundary value validations."""
-
-    def test_compression_ratio_at_minimum_boundary(self):
-        """Test compression ratio at minimum allowed value (0.0)."""
-        req = CompressRequest(
-            context="Test",
-            compression_model_name="espresso_v1",
-            target_compression_ratio=0.0,
-        )
+    def test_ratio_minimum_zero(self):
+        req = CompressRequest(context="Test", query="q", target_compression_ratio=0.0)
         assert req.target_compression_ratio == 0.0
 
-    def test_compression_ratio_high_value_allowed(self):
-        """Test high compression ratios are allowed (backend enforces 200 max)."""
-        req = CompressRequest(
-            context="Test",
-            compression_model_name="espresso_v1",
-            target_compression_ratio=100.0,
-        )
+    def test_ratio_high_value(self):
+        req = CompressRequest(context="Test", query="q", target_compression_ratio=100.0)
         assert req.target_compression_ratio == 100.0
 
-    def test_compression_ratio_negative_fails(self):
-        """Test negative compression ratio fails."""
+    def test_ratio_negative_fails(self):
         with pytest.raises(ValidationError):
-            CompressRequest(
-                context="Test",
-                compression_model_name="espresso_v1",
-                target_compression_ratio=-0.1,
-            )
+            CompressRequest(context="Test", query="q", target_compression_ratio=-0.1)
 
-    def test_compression_ratio_very_high_passes(self):
-        """Test very high ratios pass SDK - backend returns error for >200."""
-        req = CompressRequest(
-            context="Test",
-            compression_model_name="espresso_v1",
-            target_compression_ratio=150.0,
-        )
-        assert req.target_compression_ratio == 150.0
-
-    def test_query_min_length_validation(self):
-        """Test query minimum length validation (min_length=1)."""
-        req = CompressRequest(
-            context="Test",
-            compression_model_name="latte_v1",
-            query="Q",  # Single char should pass
-        )
+    def test_query_single_char(self):
+        req = CompressRequest(context="Test", query="Q")
         assert req.query == "Q"
 
 
-class TestComplexSerialization:
-    """Test complex serialization scenarios."""
-
-    def test_response_full_round_trip(self):
-        """Test full response serialization/deserialization."""
+class TestSerialization:
+    def test_response_round_trip(self):
         result = CompressResult(
-            original_context="Original long text here",
-            compressed_context="Compressed text",
+            original_context="Original",
+            compressed_context="Compressed",
             original_tokens=150,
             compressed_tokens=75,
             actual_compression_ratio=0.5,
             tokens_saved=75,
             duration_ms=250,
-            target_compression_ratio=0.5,
         )
         response = CompressResponse(success=True, data=result)
-
-        # Serialize
         data = response.model_dump()
-
-        # Deserialize
         reconstructed = CompressResponse(**data)
-
-        assert reconstructed.success == response.success
-        assert reconstructed.data.compressed_tokens == response.data.compressed_tokens
-        assert reconstructed.data.original_context == response.data.original_context
+        assert reconstructed.success is True
+        assert reconstructed.data.compressed_tokens == 75

@@ -22,9 +22,7 @@ class TestAuthenticationErrors:
     def test_invalid_api_key(self, client_with_invalid_key):
         """Test that invalid API key raises AuthenticationError."""
         with pytest.raises(AuthenticationError):
-            client_with_invalid_key.compress(
-                context="Test context", compression_model_name="espresso_v1"
-            )
+            client_with_invalid_key.compress(context="Test context", query="test")
 
     def test_missing_api_key(self):
         """Test that missing API key raises AuthenticationError."""
@@ -38,14 +36,14 @@ class TestValidationErrors:
     def test_empty_context(self, admin_client):
         """Test that empty context raises error (backend validation)."""
         with pytest.raises((ValidationError, ServerError, CompresrError)):
-            admin_client.compress(context="", compression_model_name="espresso_v1")
+            admin_client.compress(context="", query="test")
 
     def test_invalid_compression_ratio_high(self, admin_client):
         """Test that ratio > 200 raises ValidationError (backend limit)."""
         with pytest.raises(ValidationError):
             admin_client.compress(
                 context="Test context",
-                compression_model_name="espresso_v1",
+                query="test",
                 target_compression_ratio=250.0,
             )
 
@@ -54,7 +52,7 @@ class TestValidationErrors:
         with pytest.raises(ValidationError):
             admin_client.compress(
                 context="Test context",
-                compression_model_name="espresso_v1",
+                query="test",
                 target_compression_ratio=-0.5,
             )
 
@@ -73,15 +71,13 @@ class TestAsyncErrors:
     async def test_async_invalid_key(self, client_with_invalid_key):
         """Test async compression with invalid key."""
         with pytest.raises(AuthenticationError):
-            await client_with_invalid_key.compress_async(
-                context="Test context", compression_model_name="espresso_v1"
-            )
+            await client_with_invalid_key.compress_async(context="Test context", query="test")
 
     @pytest.mark.asyncio
     async def test_async_validation_error(self, admin_client):
         """Test async compression with validation error (backend validation)."""
         with pytest.raises((ValidationError, ServerError, CompresrError)):
-            await admin_client.compress_async(context="", compression_model_name="espresso_v1")
+            await admin_client.compress_async(context="", query="test")
 
 
 class TestConnectionErrors:
@@ -95,4 +91,4 @@ class TestConnectionErrors:
         )
 
         with pytest.raises(CompresrError):
-            client.compress(context="Long context " * 100, compression_model_name="espresso_v1")
+            client.compress(context="Long context " * 100, query="test")

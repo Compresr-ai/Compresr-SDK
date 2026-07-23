@@ -138,3 +138,45 @@ class TestExceptionHierarchy:
         except CompresrError as ce:
             assert ce.__cause__ is not None
             assert isinstance(ce.__cause__, ValueError)
+
+
+class TestBuiltinShadowRename:
+    """Verify the connection/timeout classes no longer shadow Python builtins."""
+
+    def test_native_compresr_connection_error(self):
+        from compresr.exceptions import CompresrConnectionError
+
+        err = CompresrConnectionError("boom")
+        assert isinstance(err, CompresrError)
+        assert err.code == "connection_error"
+
+    def test_native_compresr_timeout_error(self):
+        from compresr.exceptions import CompresrTimeoutError
+
+        err = CompresrTimeoutError("slow")
+        assert isinstance(err, CompresrError)
+        assert err.code == "timeout"
+
+    def test_back_compat_connection_alias(self):
+        # Old name still resolves for one release for callers that pinned it.
+        from compresr.exceptions import CompresrConnectionError
+        from compresr.exceptions import ConnectionError as LegacyConnectionError
+
+        assert LegacyConnectionError is CompresrConnectionError
+
+    def test_back_compat_timeout_alias(self):
+        from compresr.exceptions import CompresrTimeoutError
+        from compresr.exceptions import TimeoutError as LegacyTimeoutError
+
+        assert LegacyTimeoutError is CompresrTimeoutError
+
+    def test_star_import_does_not_shadow_builtins(self):
+        # `from compresr.exceptions import *` must NOT expose the deprecated
+        # aliases — otherwise it silently replaces builtin ConnectionError /
+        # TimeoutError in the consumer's namespace.
+        ns: dict = {}
+        exec("from compresr.exceptions import *", ns)
+        assert "ConnectionError" not in ns
+        assert "TimeoutError" not in ns
+        assert "CompresrConnectionError" in ns
+        assert "CompresrTimeoutError" in ns

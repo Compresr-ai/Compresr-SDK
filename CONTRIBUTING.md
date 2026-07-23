@@ -69,5 +69,5 @@ See [.github/TESTING.md](.github/TESTING.md) for manual `act` usage.
 
 ## Questions?
 
-- Open a [Discussion](https://github.com/compresr/sdk/discussions)
+- Open a [Discussion](https://github.com/Compresr-ai/Compresr-SDK/discussions)
 - Email: support@compresr.ai

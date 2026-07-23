@@ -1,0 +1,22 @@
+# Same as proxy_config.yaml but routes to the REAL OpenAI model instead of the
+# echo upstream — so you see a real grounded answer off the compressed prompt.
+#
+# Start:  litellm --config proxy_config_openai.yaml --port 4000
+# Requires OPENAI_API_KEY and COMPRESR_API_KEY in the environment.
+
+model_list:
+  - model_name: demo-model
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+guardrails:
+  - guardrail_name: "compresr"
+    litellm_params:
+      guardrail: compresr
+      mode: pre_call
+      api_key: os.environ/COMPRESR_API_KEY
+      default_on: true
+
+general_settings:
+  master_key: sk-demo-1234

@@ -1,9 +1,4 @@
-"""
-Inference Schemas
-
-Schemas for compression endpoints.
-Matches backend schemas exactly - backend is single source of truth.
-"""
+"""Compression schemas. Mirrors backend types — backend is source of truth."""
 
 from typing import List, Optional
 
@@ -12,75 +7,74 @@ from pydantic import BaseModel, Field
 from .base import BaseResponse
 
 
-# Compression ratio constants
-# SDK only validates non-negative; backend enforces full range (0-200)
 class CompressionConfig:
-    MIN_RATIO = 0.0  # Only validate non-negative
-    DEFAULT_RATIO = 0.5  # Remove 50%
-
-
-# =============================================================================
-# Streaming
-# =============================================================================
+    MIN_RATIO = 0.0
+    DEFAULT_RATIO = 0.5
 
 
 class StreamChunk(BaseModel):
-    """A chunk of streamed response."""
-
     content: str
     done: bool = False
     error: Optional[str] = None
 
 
-# =============================================================================
-# Compression Requests
-# =============================================================================
-
-
 class CompressRequest(BaseModel):
-    """Request to compress a single context.
+    """Single-context compression request.
 
-    For multiple contexts, use the /batch endpoint.
-    """
+    ``query`` is optional client-side; the backend decides whether the
+    chosen ``compression_model_name`` requires it. ``latte_v1`` does."""
 
-    context: str = Field(..., min_length=1, description="Context text to compress (single string)")
-    compression_model_name: str = Field(..., description="Compression model (e.g., 'espresso_v1')")
+    context: str = Field(..., min_length=1, description="Context text to compress")
     query: Optional[str] = Field(
         None,
         min_length=1,
-        description="Query for query-specific models (required for latte_v1)",
+        description="Query expressing the LLM's intent (required by latte_v1)",
+    )
+    compression_model_name: str = Field(
+        default="latte_v1",
+        description="Compression model name — backend validates",
     )
     target_compression_ratio: Optional[float] = Field(
         None,
         ge=0.0,
-        description="Target compression ratio: 0-1 (strength) or >1 for Nx factor (e.g., 60=60x). Max 200.",
+        description="0-1 (fraction to remove) or >1 for Nx factor (e.g. 60 = 60x). Max 200.",
     )
     coarse: Optional[bool] = Field(
         None,
-        description="Coarse-grained (paragraph-level) compression. True=faster, False=token-level (default). Only for latte_v1.",
+        description="Paragraph-level (True, default, faster) vs token-level (False, fine-grained). Omit to use backend default (True).",
     )
     heuristic_chunking: Optional[bool] = Field(
         None,
-        description="Use heuristic chunking for better structure preservation. Only for query-specific models.",
+        description="Use heuristic chunking for better structure preservation.",
     )
     disable_placeholders: Optional[bool] = Field(
         None,
-        description="Disable placeholder tokens in compressed output. Only for query-specific models.",
+        description="Disable placeholder tokens in compressed output.",
     )
-    source: str = Field(default="sdk:python", description="Source of request for analytics")
-
-
-# =============================================================================
-# Compression Results
-# =============================================================================
+    # latte_v2-only knobs. Backend validates that they're only sent to v2
+    # models; on latte_v1 the backend returns 422 with a clear message.
+    dynamic: Optional[bool] = Field(
+        None,
+        description=(
+            "latte_v2 only. Use adaptive (Kneedle elbow) selection instead "
+            "of a fixed ratio. When True, target_compression_ratio is ignored."
+        ),
+    )
+    dynamic_min_ratio: Optional[float] = Field(
+        None,
+        description="latte_v2 only. Floor on adaptive compression (server default 1.5).",
+    )
+    dynamic_max_ratio: Optional[float] = Field(
+        None,
+        description="latte_v2 only. Ceiling on adaptive compression (server default 10.0).",
+    )
+    source: str = Field(default="sdk:python", description="Source tag for analytics")
 
 
 class CompressResult(BaseModel):
-    """Compression result with metrics for single context."""
-
     model_config = {"from_attributes": True, "protected_namespaces": ()}
 
-    original_context: str
+    original_context: Optional[str] = None
     compressed_context: str
     original_tokens: int
     compressed_tokens: int
@@ -90,90 +84,33 @@ class CompressResult(BaseModel):
     target_compression_ratio: Optional[float] = None
 
 
-# =============================================================================
-# Responses
-# =============================================================================
-
-
 class CompressResponse(BaseResponse):
-    """Response for single compression."""
-
     data: Optional[CompressResult] = None
 
 
-# =============================================================================
-# Batch Compression
-# =============================================================================
-# Agnostic Batch Compression
-# =============================================================================
-
-
-class AgnosticBatchInput(BaseModel):
-    """A single input in an agnostic batch compression request."""
-
-    context: str = Field(..., min_length=1, description="Context text to compress")
-
-
-class AgnosticBatchRequest(BaseModel):
-    """Batch request for question-agnostic compression (no query required)."""
-
-    inputs: List[AgnosticBatchInput] = Field(
-        ..., min_length=1, max_length=100, description="List of contexts to compress"
-    )
-    compression_model_name: str = Field(..., description="Compression model to use")
-    target_compression_ratio: Optional[float] = Field(
-        None,
-        ge=0.0,
-        description="Target compression ratio: 0-1 (strength) or >1 for Nx factor",
-    )
-    source: str = Field(default="sdk:python", description="Source of request")
-
-
-# =============================================================================
-# Query-Specific Batch Compression
-# =============================================================================
-
-
 class CompressBatchInput(BaseModel):
-    """A single input in a query-specific batch compression request."""
-
-    context: str = Field(..., min_length=1, description="Context text to compress")
-    query: str = Field(..., min_length=1, description="Query for this context (required)")
+    context: str = Field(..., min_length=1)
+    query: Optional[str] = Field(None, min_length=1)
 
 
 class CompressBatchRequest(BaseModel):
-    """Batch request for question-specific compression."""
-
-    inputs: List[CompressBatchInput] = Field(
-        ..., min_length=1, max_length=100, description="List of context+query pairs"
-    )
-    compression_model_name: str = Field(..., description="Compression model to use")
-    target_compression_ratio: Optional[float] = Field(
-        None,
-        ge=0.0,
-        description="Target compression ratio: 0-1 (strength) or >1 for Nx factor",
-    )
-    coarse: Optional[bool] = Field(
-        None,
-        description="Coarse-grained (paragraph-level) compression. Only for latte_v1.",
-    )
-    heuristic_chunking: Optional[bool] = Field(
-        None,
-        description="Use heuristic chunking for better structure preservation. Only for query-specific.",
-    )
-    disable_placeholders: Optional[bool] = Field(
-        None,
-        description="Disable placeholder tokens in compressed output. Only for query-specific.",
-    )
-    source: str = Field(default="sdk:python", description="Source of request")
+    inputs: List[CompressBatchInput] = Field(..., min_length=1, max_length=100)
+    compression_model_name: str = Field(default="latte_v1")
+    target_compression_ratio: Optional[float] = Field(None, ge=0.0)
+    coarse: Optional[bool] = None
+    heuristic_chunking: Optional[bool] = None
+    disable_placeholders: Optional[bool] = None
+    # latte_v2-only knobs (shared across the whole batch).
+    dynamic: Optional[bool] = None
+    dynamic_min_ratio: Optional[float] = None
+    dynamic_max_ratio: Optional[float] = None
+    source: str = Field(default="sdk:python")
 
 
 class CompressBatchItemResult(BaseModel):
-    """Result for a single item in batch compression."""
-
     model_config = {"from_attributes": True, "protected_namespaces": ()}
 
-    original_context: str
+    original_context: Optional[str] = None
     compressed_context: str
     original_tokens: int
     compressed_tokens: int
@@ -183,8 +120,6 @@ class CompressBatchItemResult(BaseModel):
 
 
 class CompressBatchResult(BaseModel):
-    """Batch compression result with aggregated metrics."""
-
     model_config = {"from_attributes": True, "protected_namespaces": ()}
 
     results: List[CompressBatchItemResult] = Field(default_factory=list)
@@ -196,6 +131,4 @@ class CompressBatchResult(BaseModel):
 
 
 class CompressBatchResponse(BaseResponse):
-    """Response for batch compression."""
-
     data: Optional[CompressBatchResult] = None
