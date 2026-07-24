@@ -1,0 +1,27 @@
+# LiteLLM proxy config for the Compresr guardrail demo.
+#
+# - One model that routes to the local echo upstream (no real provider key).
+# - The Compresr guardrail, ON by default, in pre_call mode.
+#
+# Start:  litellm --config proxy_config.yaml --port 4000
+# (COMPRESR_API_KEY must be exported in the environment first.)
+
+model_list:
+  - model_name: demo-model
+    litellm_params:
+      model: openai/echo-model
+      api_base: http://127.0.0.1:8199/v1
+      api_key: sk-fake-upstream-no-real-key-needed
+
+guardrails:
+  - guardrail_name: "compresr"
+    litellm_params:
+      guardrail: compresr
+      mode: pre_call
+      api_key: os.environ/COMPRESR_API_KEY
+      # api_base omitted -> defaults to https://api.compresr.ai (cloud).
+      # For on-prem, set: api_base: os.environ/COMPRESR_BASE_URL
+      default_on: true
+
+general_settings:
+  master_key: sk-demo-1234

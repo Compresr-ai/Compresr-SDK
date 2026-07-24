@@ -17,15 +17,15 @@ API_KEY="${COMPRESR_API_KEY:?Error: Set COMPRESR_API_KEY in ../.env}"
 echo "Batch compressing 3 contexts..."
 echo ""
 
-curl -s -X POST "$BASE_URL/api/compress/question-agnostic/batch" \
+curl -s -X POST "$BASE_URL/api/compress/question-specific/batch" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $API_KEY" \
   -d '{
     "inputs": [
-      {"context": "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is commonly used for testing."},
-      {"context": "Machine learning is a subset of artificial intelligence that enables systems to automatically learn and improve from experience."},
-      {"context": "Context compression helps reduce API costs by intelligently removing redundant information while preserving semantic meaning."}
+      {"context": "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet and is commonly used for testing.", "query": "What is the sentence about?"},
+      {"context": "Machine learning is a subset of artificial intelligence that enables systems to automatically learn and improve from experience.", "query": "What is machine learning?"},
+      {"context": "Context compression helps reduce API costs by intelligently removing redundant information while preserving semantic meaning.", "query": "Why compress context?"}
     ],
-    "compression_model_name": "espresso_v1",
+    "compression_model_name": "latte_v2",
     "target_compression_ratio": 0.5
   }' | jq .

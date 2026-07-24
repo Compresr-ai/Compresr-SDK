@@ -1,0 +1,159 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{Python · LangChain Integration}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK · Python}{LangChain Integration}{%
+    Auto-compress tool outputs in LangChain agents to cut tokens, latency,
+    and cost — drop-in middleware, no app rewrites.}
+
+% ===========================================================================
+\section{Why teams use it}
+
+Agents waste tokens on bulky tool outputs — search results, CRM dumps,
+scraped pages, SQL rows — that the LLM only needs a small slice of.
+Compresr rewrites each tool output \emph{against the user's query} before
+it re-enters the conversation, so the model sees only what matters.
+
+\begin{itemize}
+    \item \textbf{Lower bills} — typically 40–80\% fewer tokens per tool turn.
+    \item \textbf{Faster turns} — smaller prompts mean faster LLM responses.
+    \item \textbf{Longer agent loops} — stay under context limits on
+          multi-step runs.
+    \item \textbf{Zero refactor} — one line in
+          \cprInlineCode{create\_agent}; your tools stay untouched.
+\end{itemize}
+
+Compresr fails open by default: if the compression API is unreachable,
+your agent keeps running on the original tool output — never a hard stop.
+
+% ===========================================================================
+\section{Install}
+
+\begin{shcode}
+pip install 'compresr[langchain]'
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+Requires LangChain 1.0+ and Python 3.10+.
+
+% ===========================================================================
+\section{Drop-in middleware}
+
+Pass \cprInlineCode{CompresrToolMiddleware} to \cprInlineCode{create\_agent}.
+Every tool output is compressed against the user's query before the next
+LLM turn — no tool code changes.
+
+\begin{pycode}
+from langchain.agents import create_agent
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+from compresr.integrations.langchain import CompresrToolMiddleware
+
+@tool
+def web_search(query: str) -> str:
+    # your real search call here
+    return "<search results...>"
+
+agent = create_agent(
+    model=ChatOpenAI(model="gpt-4o-mini"),
+    tools=[web_search],
+    middleware=[CompresrToolMiddleware(
+        target_compression_ratio=0.6,   # remove ~60% of tokens
+        min_tokens=200,                 # leave short outputs alone
+        query_arg="query",              # use this tool arg as the query
+    )],
+)
+
+result = agent.invoke({"messages": [
+    {"role": "user", "content": "Find recent pricing complaints."},
+]})
+\end{pycode}
+
+That's it. Tool outputs flow through Compresr; everything else — message
+shape, tool-call IDs, error handling — is preserved.
+
+% ===========================================================================
+\section{Wrap a single tool}
+
+When you only want to compress one noisy tool (and skip the middleware
+entirely), wrap it directly:
+
+\begin{pycode}
+from langchain_core.tools import tool
+from compresr.integrations.langchain import wrap_tool_with_compression
+
+@tool
+def search_crm(query: str) -> str:
+    """Search the CRM for customer notes."""
+    return "<CRM rows...>"
+
+search_crm = wrap_tool_with_compression(
+    search_crm,
+    target_compression_ratio=0.7,
+    query_arg="query",
+)
+\end{pycode}
+
+Works with plain LCEL, custom LangGraph graphs, or anywhere a
+\cprInlineCode{StructuredTool} is used. Both sync and async paths are
+covered.
+
+% ===========================================================================
+\section{Key parameters}
+
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{@{}p{4.2cm} p{2.4cm} p{7.2cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+
+\cprInlineCode{api\_key} & \cprInlineCode{None} &
+Compresr API key. Falls back to \cprInlineCode{COMPRESR\_API\_KEY}. \\
+
+\cprInlineCode{target\_compression\_ratio} & \cprInlineCode{0.5} &
+Compression strength. $\in [0,1]$ = fraction of tokens to remove
+(\cprInlineCode{0.6} = remove 60\%); $> 1$ = Nx factor
+(\cprInlineCode{4} = 4x smaller). \\
+
+\cprInlineCode{min\_tokens} & \cprInlineCode{200} &
+Skip outputs below this token count — don't pay to compress what's
+already small. \\
+
+\cprInlineCode{compression\_model} & \cprInlineCode{latte\_v1} &
+Compression model. \cprInlineCode{latte\_v1} is the default;
+\cprInlineCode{latte\_v2} is the faster variant. \\
+
+\cprInlineCode{query} & \cprInlineCode{None} &
+Static query string — useful when every call shares the same intent. \\
+
+\cprInlineCode{query\_arg} & \cprInlineCode{None} &
+Name of the tool argument whose value should be used as the query
+(e.g.\ \cprInlineCode{"query"}, \cprInlineCode{"question"}). \\
+
+\cprInlineCode{query\_extractor} & \cprInlineCode{None} &
+Callable for custom query logic — return \cprInlineCode{None} to fall
+back to the default. \\
+
+\bottomrule
+\end{longtable}
+
+\textbf{Query resolution order:} \cprInlineCode{query} →
+\cprInlineCode{query\_extractor} → \cprInlineCode{query\_arg} → smart
+default (most recent user message). You only need to set one.
+
+\textit{Also available:}
+\cprInlineCode{CompresrSummarizationMiddleware} (KV-cache-friendly history
+summarization) and \cprInlineCode{CompresrPromptMiddleware} (last-mile
+prompt budget enforcement). A
+\cprInlineCode{BaseDocumentCompressor} for retriever-side compression
+ships as \cprInlineCode{CompresrExtractor}.
+
+\vfill
+{\footnotesize\color{cprMuted}%
+Questions or a custom deployment?
+Reach the team at \href{mailto:support@compresr.ai}{support@compresr.ai}.}
+
+\end{document}

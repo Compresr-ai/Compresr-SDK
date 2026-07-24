@@ -1,0 +1,140 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{TypeScript · LangGraph Integration}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK · TypeScript}{LangGraph Integration}{%
+    Compress graph state, checkpoints, and stores in LangGraph.js with
+    drop-in, query-aware primitives. Cut token spend and storage size
+    without rewriting your graph.}
+
+% ===========================================================================
+\section{Install}
+
+\begin{shcode}
+npm install @compresr/sdk
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+Peers (\cprInlineCode{@langchain/langgraph},
+\cprInlineCode{@langchain/langgraph-checkpoint},
+\cprInlineCode{@langchain/core}) are optional --- install only what you use.
+Node $\geq$ 20, dual ESM+CJS, typed end-to-end. Import from the dedicated
+entrypoint:
+
+\begin{tscode}
+import {
+  makeCompresrNode, CompresrCheckpointSerializer, CompresrStore,
+} from '@compresr/sdk/integrations/langgraph';
+\end{tscode}
+
+A \cprInlineCode{compresrHandoffTool} is also available for supervisor /
+multi-agent patterns --- see the SDK reference.
+
+% ===========================================================================
+\section{Compression node}
+
+\cprInlineCode{makeCompresrNode} returns an async graph node that reads a
+state field, compresses it against a query, and returns a patch. No-ops when
+input is missing, too short, or unchanged.
+
+\begin{tscode}
+const compress = makeCompresrNode<typeof State.State>({
+  apiKey:                 process.env.COMPRESR_API_KEY!,
+  contextKey:             'retrievedText',
+  queryKey:               'question',
+  targetCompressionRatio: 0.5,
+  minTokens:              200,
+});
+graph.addNode('compress', compress);
+\end{tscode}
+
+% ===========================================================================
+\section{Compressed checkpoints}
+
+\cprInlineCode{CompresrCheckpointSerializer} plugs into the
+\cprInlineCode{serde} slot of any LangGraph.js checkpointer
+(\cprInlineCode{MemorySaver}, \cprInlineCode{SqliteSaver},
+\cprInlineCode{PostgresSaver}). Long strings on the listed fields are
+compressed on write. \textbf{Compression is lossy and one-way} — reads
+return the compressed string, not the original. Use the
+\cprInlineCode{fields} allow-list to scope compression to retrieved
+text, transcripts, and other paraphrasable payloads; leave titles, IDs,
+and anything you need to read back verbatim out of the list.
+
+\begin{tscode}
+const checkpointer = new MemorySaver(
+  new CompresrCheckpointSerializer({
+    apiKey:                 process.env.COMPRESR_API_KEY!,
+    fields:                 new Set(['retrievedText', 'transcript']),
+    minTokens:              500,
+    targetCompressionRatio: 0.5,
+  }),
+);
+const graph = builder.compile({ checkpointer });
+\end{tscode}
+
+Without \cprInlineCode{fields}, every string $\geq$
+\cprInlineCode{minTokens} anywhere in the state tree is compressed
+(including IDs and titles that exceed the threshold) — set the allow-list
+in any production deployment.
+
+% ===========================================================================
+\section{Compressed store}
+
+\cprInlineCode{CompresrStore} wraps any LangGraph.js
+\cprInlineCode{BaseStore} by composition: reads and namespace operations
+pass through; \cprInlineCode{put} and \cprInlineCode{batch} compress
+allow-listed string fields above the token threshold.
+
+\begin{tscode}
+const store = new CompresrStore(new InMemoryStore(), {
+  apiKey:    process.env.COMPRESR_API_KEY!,
+  fields:    new Set(['retrievedText']),
+  minTokens: 500,
+});
+await store.put(['users', 'u_42', 'memories'], 'memo_01', {
+  retrievedText: '<3KB retrieval output>',
+  score:         0.91,
+});
+\end{tscode}
+
+% ===========================================================================
+\section{Key parameters}
+
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{@{}p{3.6cm} p{2.4cm} p{8.0cm}@{}}
+\toprule
+\textbf{Option} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+\cprInlineCode{apiKey} / \cprInlineCode{client} & --- &
+API key, or a pre-built \cprInlineCode{CompressionClient}. One required. \\
+\cprInlineCode{contextKey} & --- &
+\textit{(node only)} State key holding the text to compress. Required. \\
+\cprInlineCode{fields} & --- &
+\textit{(serializer / store)} Allow-list of parent keys to compress.
+Strongly recommended. \\
+\cprInlineCode{compressionModel} & \cprInlineCode{latte\_v1} &
+\cprInlineCode{latte\_v2} is the faster variant. \\
+\cprInlineCode{targetCompressionRatio} & \cprInlineCode{0.5} &
+$[0,1]$ = fraction of tokens to remove; $>1$ = Nx factor. \\
+\cprInlineCode{minTokens} & node: \cprInlineCode{200} \newline
+serializer / store: \cprInlineCode{500} &
+Skip compression below this threshold. Storage paths use a higher
+default to avoid compressing short rows. \\
+\cprInlineCode{coarse} & (server) &
+\cprInlineCode{true} paragraph-level, \cprInlineCode{false} token-level. \\
+\cprInlineCode{query} / \cprInlineCode{queryKey} / \cprInlineCode{queryExtractor}
+  & --- &
+Choose the query that drives compression: static string, state key, or
+extractor function. Highest-priority non-empty wins. \\
+\cprInlineCode{onError} & \cprInlineCode{passthrough} &
+On transport, validation, or unexpected errors: return the original string
+so the graph keeps running. Use \cprInlineCode{raise} to surface
+exceptions. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

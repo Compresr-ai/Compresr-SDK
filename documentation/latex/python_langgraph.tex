@@ -1,0 +1,212 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{Python \textperiodcentered{} LangGraph Integration}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK \textperiodcentered{} Python}{LangGraph Integration}{%
+    Compress graph state, checkpoints, and long-term stores in LangGraph ---
+    smaller prompts, smaller checkpoint rows, lower token spend, with no
+    changes to your graph's behavior.}
+
+% ===========================================================================
+\section{Why use it}
+
+LangGraph state grows fast: RAG documents, agent scratchpads, accumulated
+tool outputs. Every superstep rewrites the whole checkpoint row, every node
+forwards bloated context into the next prompt. Compresr shrinks the largest
+text fields at three independent layers --- pick any combination:
+
+\begin{itemize}
+    \item \textbf{Graph nodes} --- drop a compression step into your
+          \cprInlineCode{StateGraph}.
+    \item \textbf{Checkpoint serializer} --- compress strings \emph{before}
+          they hit Postgres/Redis. Smaller rows, less write amplification.
+    \item \textbf{Long-term store} --- compress values on write into any
+          \cprInlineCode{BaseStore}.
+\end{itemize}
+
+Fail-open by default: if the Compresr API is unreachable, the original text
+flows through unchanged and your graph keeps running.
+
+% ===========================================================================
+\section{Install}
+
+\begin{shcode}
+pip install 'compresr[langgraph]'
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+% ===========================================================================
+\section{Compression as a graph node}
+
+Drop a Compresr node between your retriever and your LLM call. The node
+reads a string field from state, compresses it against the user's query,
+and writes it back.
+
+\begin{pycode}
+import os
+from langgraph.graph import StateGraph, START, END
+from compresr.integrations.langgraph import make_compresr_node
+
+graph = StateGraph(dict)
+
+graph.add_node("retrieve", retrieve_docs)         # your retriever
+graph.add_node(
+    "compress",
+    make_compresr_node(
+        api_key=os.environ["COMPRESR_API_KEY"],
+        context_key="retrieved_text",             # field to compress
+        query_key="user_question",                # query field
+        target_compression_ratio=0.5,             # remove ~50% of tokens
+        min_tokens=200,                           # skip if shorter
+    ),
+)
+graph.add_node("answer", call_llm)
+
+graph.add_edge(START, "retrieve")
+graph.add_edge("retrieve", "compress")
+graph.add_edge("compress", "answer")
+graph.add_edge("answer", END)
+
+app = graph.compile()
+\end{pycode}
+
+% ===========================================================================
+\section{Compressed checkpoints}
+
+Wrap your checkpoint saver's serializer to compress long strings
+\emph{before} they get persisted. Smaller checkpoint rows mean faster
+writes, less storage cost, and less TOAST write amplification on Postgres.
+
+\begin{pycode}
+import os
+from langgraph.checkpoint.postgres import PostgresSaver
+from compresr.integrations.langgraph import CompresrCheckpointSerializer
+
+saver = PostgresSaver(
+    connection_string="postgresql://...",
+    serde=CompresrCheckpointSerializer(
+        api_key=os.environ["COMPRESR_API_KEY"],
+        min_tokens=500,                 # gate by size: skip short strings
+        target_compression_ratio=0.6,
+    ),
+)
+\end{pycode}
+
+The checkpoint serializer gates by size with \cprInlineCode{min\_tokens}:
+checkpointers serialize each channel value on its own, so the serializer
+never sees the field name and the \cprInlineCode{fields} allowlist does not
+apply here --- use \cprInlineCode{fields} on \cprInlineCode{CompresrStore}
+(next section), which receives the whole value dict. Keep large
+paraphrasable channels (RAG dumps, scratchpads) above the threshold and
+short verbatim channels (IDs, status codes) naturally fall below it.
+
+\begin{cprNoteBox}
+\textbf{Lossy by design.} Checkpoint and store compression is one-way:
+reads return the compressed string, not the original. Scope it to
+paraphrasable payloads (RAG dumps, scratchpads, transcripts) --- keyed by
+\cprInlineCode{min\_tokens} for checkpoints and by \cprInlineCode{fields}
+for the store --- and keep anything you need verbatim (IDs, status codes,
+structured outputs) out of the compressed path.
+\end{cprNoteBox}
+
+% ===========================================================================
+\section{Compressed long-term store}
+
+Wrap any LangGraph \cprInlineCode{BaseStore}
+(\cprInlineCode{InMemoryStore}, \cprInlineCode{PostgresStore},
+\cprInlineCode{RedisStore}). String fields above the threshold are
+compressed on \cprInlineCode{put}; reads pass straight through.
+
+\begin{pycode}
+import os
+from langgraph.store.memory import InMemoryStore
+from compresr.integrations.langgraph import CompresrStore
+
+inner = InMemoryStore()
+store = CompresrStore(
+    inner,
+    api_key=os.environ["COMPRESR_API_KEY"],
+    fields={"retrieved_text", "scratchpad"},
+    min_tokens=500,
+    target_compression_ratio=0.6,
+)
+
+store.put(("user_42",), "doc_1", {
+    "retrieved_text": "<long RAG dump>",          # compressed
+    "title": "Order #4711 case notes",            # untouched
+})
+
+item = store.get(("user_42",), "doc_1")           # reads pass through
+\end{pycode}
+
+A fourth helper, \cprInlineCode{compresr\_handoff\_tool(agent\_name, ...)},
+builds a supervisor handoff tool that compresses
+\cprInlineCode{task\_description} and \cprInlineCode{context} in flight:
+
+\begin{pycode}
+from compresr.integrations.langgraph import compresr_handoff_tool
+
+handoff = compresr_handoff_tool(
+    "researcher",                                 # target agent name
+    api_key=os.environ["COMPRESR_API_KEY"],
+    target_compression_ratio=0.6,
+)
+\end{pycode}
+
+For \cprInlineCode{langchain.agents.create\_agent} pipelines, the same
+package also exposes \cprInlineCode{CompresrToolMiddleware},
+\cprInlineCode{CompresrSummarizationMiddleware}, and
+\cprInlineCode{CompresrPromptMiddleware} --- see the LangChain integration
+PDF for usage.
+
+% ===========================================================================
+\section{Key parameters}
+
+\renewcommand{\arraystretch}{1.2}
+\begin{longtable}{@{}p{4.2cm} p{2.4cm} p{7.5cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+
+\cprInlineCode{api\_key} & \cprInlineCode{None} &
+Your Compresr API key. Required unless you pass a pre-built
+\cprInlineCode{client}. \\
+
+\cprInlineCode{client} & \cprInlineCode{None} &
+Share a single \cprInlineCode{CompressionClient} across components for
+pooled transport, custom timeouts, or proxy/mTLS setups. \\
+
+\cprInlineCode{compression\_model} & \cprInlineCode{latte\_v1} &
+\cprInlineCode{latte\_v1} is the default query-aware model;
+\cprInlineCode{latte\_v2} is the faster variant. \\
+
+\cprInlineCode{target\_compression\_ratio} & \cprInlineCode{0.5} &
+Strength. Values in $[0,1]$ remove that fraction of tokens (0.5 = $\sim$50\%
+smaller). Values $> 1$ apply an Nx factor (4 = $\sim$4x smaller). \\
+
+\cprInlineCode{min\_tokens} & 200 (node) / 500 (store, checkpoint) &
+Skip compression below this token count --- keeps short strings cheap. \\
+
+\cprInlineCode{fields} & \cprInlineCode{None} &
+(\cprInlineCode{CompresrStore} only.) Allowlist of dict keys eligible for
+compression. Not applied by the checkpoint serializer, which gates by
+\cprInlineCode{min\_tokens} (it sees one channel value at a time, without
+its key). \\
+
+\cprInlineCode{context\_key} & --- &
+(Node only, required.) State field to compress. \\
+
+\cprInlineCode{query\_key} & \cprInlineCode{None} &
+(Node only.) State field used as the compression query (e.g.\
+\cprInlineCode{"user\_question"}). \\
+
+\cprInlineCode{on\_error} & \cprInlineCode{"passthrough"} &
+\cprInlineCode{"passthrough"} = fail-open, log and return the original text.
+\cprInlineCode{"raise"} = propagate the exception. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

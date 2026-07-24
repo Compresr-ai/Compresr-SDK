@@ -1,353 +1,311 @@
 /**
- * CompressionClient - Token-level context compression
+ * ``CompressionClient`` — query-aware context compression.
  *
- * Compresses context text to reduce token count before sending to LLMs.
- * Supports both agnostic (no query) and query-specific compression.
- *
- * Models:
- * - espresso_v1 (default): Agnostic compression, no query needed
- * - latte_v1: Query-specific compression, query REQUIRED
- *
- * Endpoints:
- *   Single:
- *     /compress/question-agnostic/     - context: string (no query)
- *     /compress/question-specific/     - context: string, query: string
- *   Batch:
- *     /compress/question-agnostic/batch - inputs: [{context}]
- *     /compress/question-specific/batch - inputs: [{context, query}]
- *   Stream:
- *     /compress/question-agnostic/stream - context: string
- *     /compress/question-specific/stream - context: string, query: string
+ * Only the question-specific endpoint is exposed; pass any
+ * ``compressionModelName`` you have enabled on the backend. ``query`` is
+ * optional client-side — the backend validates whether the chosen model
+ * requires it.
  */
 import { ZodError } from 'zod';
-import {
-  ENDPOINTS,
-  MODELS,
-} from '../config/index.js';
-import { ValidationError } from '../errors/index.js';
+
+import { ENDPOINTS, MODELS } from '../config/index.js';
+import { CompresrError, ValidationError } from '../errors/index.js';
 import { HttpClient, type HttpClientOptions } from '../http/client.js';
 import {
-  CompressRequestSchema,
-  CompressResponseSchema,
-  AgnosticBatchRequestSchema,
   CompressBatchRequestSchema,
   CompressBatchResponseSchema,
-  type CompressResponse,
+  CompressRequestSchema,
+  CompressResponseSchema,
   type CompressBatchResponse,
+  type CompressResponse,
   type StreamChunk,
 } from '../schemas/index.js';
+import {
+  CompresrEngine,
+  anthropicMessages,
+  openaiChatCompletions,
+  nativeRun,
+  type CompressionPolicyOptions,
+  type NormalizedResult,
+} from '../agents/index.js';
+import type { AnthropicMessagesFacade } from '../agents/facades/anthropic.js';
+import type { OpenAIChatFacade } from '../agents/facades/openai.js';
+import type { NativeRunOptions } from '../agents/facades/native.js';
+import { ResearchFacade } from '../agents/research/index.js';
 
-/**
- * Options for single compression
- */
 export interface CompressOptions {
-  /** Context to compress (single string) */
   context: string;
-  /** Compression model (default: espresso_v1) */
-  compressionModelName?: string;
-  /** Query for query-specific models (required for latte_v1) */
   query?: string;
-  /**
-   * Target compression ratio:
-   * - 0-1: percentage to keep (e.g., 0.5 = keep 50%)
-   * - >1: Nx factor (e.g., 4 = 4x compression = keep 25%)
-   */
+  compressionModelName?: string;
   targetCompressionRatio?: number;
-  /** 
-   * Paragraph-level compression (only for query-specific with latte_v1).
-   * - true: faster, coarser compression (default for latte_v1)
-   * - false: slower, token-level compression
-   * Ignored for agnostic compression (no query).
-   */
   coarse?: boolean;
-  /**
-   * Use heuristic chunking for better structure preservation.
-   * Only for query-specific models. Ignored for agnostic.
-   */
   heuristicChunking?: boolean;
-  /**
-   * Disable placeholder tokens in compressed output.
-   * Only for query-specific models. Ignored for agnostic.
-   */
   disablePlaceholders?: boolean;
+  /** latte_v2 only. Adaptive (Kneedle elbow) selection; overrides
+   *  `targetCompressionRatio`. */
+  dynamic?: boolean;
+  /** latte_v2 only. Floor on adaptive compression (server default 1.5x). */
+  dynamicMinRatio?: number;
+  /** latte_v2 only. Ceiling on adaptive compression (server default 10x). */
+  dynamicMaxRatio?: number;
+}
+
+export interface BatchInput {
+  context: string;
+  query?: string;
 }
 
 /**
- * Options for batch compression
- * - If queries is undefined: uses agnostic endpoint (no queries required)
- * - If queries is provided: uses query-specific endpoint
+ * Two equivalent input forms:
+ *  - Convenience: `contexts` (+ optional `queries` as string or string[]).
+ *  - Pair form (matches the wire format): `inputs: [{ context, query }, ...]`.
+ * Pass exactly one of `inputs` or `contexts`.
  */
 export interface CompressBatchOptions {
-  /** List of contexts to compress (1-100 items) */
-  contexts: string[];
-  /** Single query for all contexts, or one query per context. Omit for agnostic batch. */
+  contexts?: string[];
   queries?: string | string[];
-  /** Compression model (default: espresso_v1) */
+  inputs?: BatchInput[];
   compressionModelName?: string;
-  /** Target compression ratio */
   targetCompressionRatio?: number;
-  /** 
-   * Paragraph-level compression (only for query-specific batch).
-   * Ignored for agnostic batch (queries undefined).
-   */
   coarse?: boolean;
-  /**
-   * Use heuristic chunking for better structure preservation.
-   * Only for query-specific batch. Ignored for agnostic.
-   */
   heuristicChunking?: boolean;
-  /**
-   * Disable placeholder tokens in compressed output.
-   * Only for query-specific batch. Ignored for agnostic.
-   */
   disablePlaceholders?: boolean;
+  /** latte_v2 only. Adaptive selection; overrides `targetCompressionRatio`. */
+  dynamic?: boolean;
+  /** latte_v2 only. Floor on adaptive compression (server default 1.5x). */
+  dynamicMinRatio?: number;
+  /** latte_v2 only. Ceiling on adaptive compression (server default 10x). */
+  dynamicMaxRatio?: number;
 }
 
-/**
- * Token-level compression client
- *
- * @example
- * ```typescript
- * import { CompressionClient } from 'compresr';
- *
- * const client = new CompressionClient({ apiKey: 'cmp_...' });
- *
- * // Single agnostic compression
- * const result = await client.compress({
- *   context: 'Your long context...',
- * });
- *
- * // Single query-specific compression
- * const result = await client.compress({
- *   context: 'Your long context...',
- *   query: 'What is the main conclusion?',
- *   compressionModelName: 'latte_v1',
- * });
- *
- * // Batch agnostic compression
- * const result = await client.compressBatch({
- *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
- * });
- *
- * // Batch query-specific compression
- * const result = await client.compressBatch({
- *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
- *   queries: 'What are the key points?',
- *   compressionModelName: 'latte_v1',
- * });
- * ```
- */
+export interface CompressionClientOptions extends HttpClientOptions {
+  /** Optional ``"provider:model"`` (or ``"provider/model"``) selector to opt
+   * into the provider-shape facades (``.messages``, ``.chat``, ``run``). */
+  llm?: string;
+  /** Optional provider API key forwarded to the underlying LLM. */
+  llmApiKey?: string;
+  /** Optional compression policy applied to the agent's tool middleware. */
+  compression?: CompressionPolicyOptions;
+  /** Provider-aware prompt caching. Anthropic: middleware. OpenAI: prompt_cache_key
+   *  + retention mapping. Gemini: no-op (implicit at API). Default: true. */
+  enablePromptCache?: boolean;
+  /** Cache TTL: "5m" or "1h". Anthropic ephemeral TTL; OpenAI maps "1h" -> "24h". */
+  promptCacheTtl?: '5m' | '1h';
+  /** Anthropic: skip caching below this conversation length. */
+  promptCacheMinMessages?: number;
+  /** OpenAI routing key — improves cache hit rate. Ignored for non-OpenAI. */
+  openaiPromptCacheKey?: string;
+}
+
 export class CompressionClient {
   private readonly http: HttpClient;
+  private readonly llm?: string;
+  private readonly llmApiKey?: string;
+  private readonly compressionPolicy?: CompressionPolicyOptions;
+  private readonly enablePromptCache: boolean;
+  private readonly promptCacheTtl: '5m' | '1h';
+  private readonly promptCacheMinMessages: number;
+  private readonly openaiPromptCacheKey?: string;
+  private engine?: CompresrEngine;
+  private anthropicFacade?: AnthropicMessagesFacade;
+  private openaiFacade?: OpenAIChatFacade;
+  private researchFacade?: ResearchFacade;
 
-  constructor(options: HttpClientOptions) {
-    this.http = new HttpClient(options);
+  constructor(options: CompressionClientOptions) {
+    // Env fallback for missing apiKey — browser-safe (typeof process check).
+    // File fallback (`~/.compresr/credentials.json`) lives in the Node-only
+    // `@compresr/sdk/auth` subpath: import { createClient } from
+    // '@compresr/sdk/auth' for automatic pickup, or call resolveApiKey()
+    // directly and pass the result here.
+    let resolvedApiKey = options.apiKey;
+    if (
+      resolvedApiKey === undefined &&
+      typeof process !== 'undefined' &&
+      process.env?.COMPRESR_API_KEY
+    ) {
+      resolvedApiKey = process.env.COMPRESR_API_KEY;
+    }
+    this.http = new HttpClient({ ...options, apiKey: resolvedApiKey });
+    if (options.llm !== undefined) this.llm = options.llm;
+    if (options.llmApiKey !== undefined) this.llmApiKey = options.llmApiKey;
+    if (options.compression !== undefined) {
+      this.compressionPolicy = options.compression;
+    }
+    this.enablePromptCache = options.enablePromptCache ?? true;
+    this.promptCacheTtl = options.promptCacheTtl ?? '5m';
+    this.promptCacheMinMessages = options.promptCacheMinMessages ?? 2;
+    if (options.openaiPromptCacheKey !== undefined) {
+      this.openaiPromptCacheKey = options.openaiPromptCacheKey;
+    }
   }
 
-  private resolveEndpoints(query?: string): {
-    base: string;
-    stream: string;
-  } {
-    if (query !== undefined) {
-      return {
-        base: ENDPOINTS.COMPRESS_QS,
-        stream: ENDPOINTS.COMPRESS_QS_STREAM,
-      };
+  private requireEngine(surface: string): CompresrEngine {
+    if (this.engine !== undefined) return this.engine;
+    if (this.llm === undefined) {
+      throw new CompresrError(
+        `CompressionClient.${surface} requires an LLM provider. ` +
+          "Construct with new CompressionClient({ apiKey, llm: 'anthropic:claude-...', llmApiKey }).",
+        'missing_llm'
+      );
     }
-    return {
-      base: ENDPOINTS.COMPRESS_AGNOSTIC,
-      stream: ENDPOINTS.COMPRESS_AGNOSTIC_STREAM,
+    const engineOpts: ConstructorParameters<typeof CompresrEngine>[0] = {
+      compresrClient: this,
+      llm: this.llm,
+      enablePromptCache: this.enablePromptCache,
+      promptCacheTtl: this.promptCacheTtl,
+      promptCacheMinMessages: this.promptCacheMinMessages,
     };
+    if (this.openaiPromptCacheKey !== undefined) {
+      engineOpts.openaiPromptCacheKey = this.openaiPromptCacheKey;
+    }
+    if (this.llmApiKey !== undefined) engineOpts.llmApiKey = this.llmApiKey;
+    if (this.compressionPolicy !== undefined) {
+      engineOpts.policy = this.compressionPolicy;
+    }
+    this.engine = new CompresrEngine(engineOpts);
+    return this.engine;
+  }
+
+  /** Anthropic-shaped facade: ``client.messages.create({...})``. */
+  get messages(): AnthropicMessagesFacade {
+    const engine = this.requireEngine('messages.create');
+    this.anthropicFacade ??= anthropicMessages(engine);
+    return this.anthropicFacade;
+  }
+
+  /** OpenAI-shaped facade: ``client.chat.completions.create({...})``. */
+  get chat(): OpenAIChatFacade {
+    const engine = this.requireEngine('chat.completions.create');
+    this.openaiFacade ??= openaiChatCompletions(engine);
+    return this.openaiFacade;
+  }
+
+  /** Native facade — returns the provider-agnostic ``NormalizedResult``. */
+  async run(options: NativeRunOptions): Promise<NormalizedResult> {
+    const engine = this.requireEngine('run');
+    return nativeRun(engine, options);
+  }
+
+  /**
+   * Research facade: ``await client.research.run("question")``.
+   *
+   * Multi-step web-research agent with per-snippet `latte_v1` compression and
+   * multi-provider prompt caching. Requires `llm=` on the client.
+   */
+  get research(): ResearchFacade {
+    const engine = this.requireEngine('research.run');
+    // ResearchFacade takes a structural ResearchEngine; CompresrEngine has the
+    // required @internal accessors but its types are wider, so cast at the
+    // single integration point.
+    this.researchFacade ??= new ResearchFacade(
+      engine as unknown as ConstructorParameters<typeof ResearchFacade>[0]
+    );
+    return this.researchFacade;
   }
 
   private buildRequest(options: CompressOptions): Record<string, unknown> {
-    const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
-
-    // Only include QS-specific params when using query-specific endpoint
-    // Agnostic endpoint doesn't support these parameters
-    const isQuerySpecific = options.query !== undefined;
-    const effectiveCoarse = isQuerySpecific ? options.coarse : undefined;
-    const effectiveHeuristicChunking = isQuerySpecific ? options.heuristicChunking : undefined;
-    const effectiveDisablePlaceholders = isQuerySpecific ? options.disablePlaceholders : undefined;
-
     try {
-      const request = CompressRequestSchema.parse({
+      return CompressRequestSchema.parse({
         context: options.context,
-        compression_model_name: modelName,
         query: options.query,
+        compression_model_name: options.compressionModelName ?? MODELS.LATTE,
         target_compression_ratio: options.targetCompressionRatio,
-        coarse: effectiveCoarse,
-        heuristic_chunking: effectiveHeuristicChunking,
-        disable_placeholders: effectiveDisablePlaceholders,
+        coarse: options.coarse,
+        heuristic_chunking: options.heuristicChunking,
+        disable_placeholders: options.disablePlaceholders,
+        dynamic: options.dynamic,
+        dynamic_min_ratio: options.dynamicMinRatio,
+        dynamic_max_ratio: options.dynamicMaxRatio,
       });
-      return request;
     } catch (error) {
-      if (error instanceof ZodError) {
-        const firstError = error.errors[0];
-        throw new ValidationError(
-          firstError?.message ?? 'Validation failed',
-          firstError?.path.join('.')
-        );
-      }
-      throw error;
+      throw mapZodError(error);
     }
   }
 
-  // ==========================================================================
-  // Single Compression
-  // ==========================================================================
-
-  /**
-   * Compress a single context
-   *
-   * For multiple contexts, use compressBatch().
-   *
-   * @example
-   * ```typescript
-   * // Agnostic compression (no query)
-   * const result = await client.compress({
-   *   context: 'Your long context text...',
-   * });
-   *
-   * // Query-specific compression (with query)
-   * const result = await client.compress({
-   *   context: 'Your long context text...',
-   *   query: 'What is the main conclusion?',
-   *   compressionModelName: 'latte_v1',
-   * });
-   *
-   * console.log(`Saved ${result.data.tokens_saved} tokens!`);
-   * ```
-   */
   async compress(options: CompressOptions): Promise<CompressResponse> {
     const request = this.buildRequest(options);
-    const { base } = this.resolveEndpoints(options.query);
-
-    const response = await this.http.post<unknown>(base, request);
+    const response = await this.http.post<unknown>(ENDPOINTS.COMPRESS, request);
     return CompressResponseSchema.parse(response);
   }
 
-  /**
-   * Stream compression chunks
-   *
-   * @example
-   * ```typescript
-   * for await (const chunk of client.compressStream({
-   *   context: 'Your long context...',
-   * })) {
-   *   process.stdout.write(chunk.content);
-   * }
-   * ```
-   */
   async *compressStream(
     options: CompressOptions
   ): AsyncGenerator<StreamChunk, void, undefined> {
     const request = this.buildRequest(options);
-    const { stream } = this.resolveEndpoints(options.query);
-
-    for await (const content of this.http.stream(stream, request)) {
+    for await (const content of this.http.stream(ENDPOINTS.COMPRESS_STREAM, request)) {
       yield { content, done: false };
     }
     yield { content: '', done: true };
   }
 
-  // ==========================================================================
-  // Batch Compression
-  // ==========================================================================
-
-  /**
-   * Batch compress multiple contexts
-   *
-   * - If queries is undefined: uses agnostic endpoint (no queries required)
-   * - If queries is provided: uses query-specific endpoint
-   *
-   * @example
-   * ```typescript
-   * // Agnostic batch (no queries)
-   * const result = await client.compressBatch({
-   *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
-   * });
-   *
-   * // Query-specific batch (same query for all)
-   * const result = await client.compressBatch({
-   *   contexts: ['Doc 1...', 'Doc 2...', 'Doc 3...'],
-   *   queries: 'What are the key points?',
-   *   compressionModelName: 'latte_v1',
-   * });
-   *
-   * // Query-specific batch (different queries)
-   * const result = await client.compressBatch({
-   *   contexts: ['ML doc...', 'NLP doc...'],
-   *   queries: ['What is ML?', 'What is NLP?'],
-   *   compressionModelName: 'latte_v1',
-   * });
-   *
-   * console.log(`Saved ${result.data.total_tokens_saved} tokens!`);
-   * ```
-   */
-  async compressBatch(
-    options: CompressBatchOptions
-  ): Promise<CompressBatchResponse> {
-    const modelName = options.compressionModelName ?? MODELS.ESPRESSO;
+  async compressBatch(options: CompressBatchOptions): Promise<CompressBatchResponse> {
+    const inputs = buildBatchInputs(options);
 
     try {
-      if (options.queries === undefined) {
-        // Agnostic batch (no queries)
-        const inputs = options.contexts.map((context) => ({ context }));
-        const request = AgnosticBatchRequestSchema.parse({
-          inputs,
-          compression_model_name: modelName,
-          target_compression_ratio: options.targetCompressionRatio,
-        });
-
-        const response = await this.http.post<unknown>(
-          ENDPOINTS.COMPRESS_AGNOSTIC_BATCH,
-          request
-        );
-        return CompressBatchResponseSchema.parse(response);
-      } else {
-        // Query-specific batch
-        const queryList =
-          typeof options.queries === 'string'
-            ? Array(options.contexts.length).fill(options.queries)
-            : options.queries;
-
-        if (queryList.length !== options.contexts.length) {
-          throw new ValidationError(
-            `Number of queries (${queryList.length}) must match number of contexts (${options.contexts.length})`
-          );
-        }
-
-        const inputs = options.contexts.map((context, i) => ({
-          context,
-          // Safe: queryList length validated above
-          query: queryList[i] as string,
-        }));
-
-        const request = CompressBatchRequestSchema.parse({
-          inputs,
-          compression_model_name: modelName,
-          target_compression_ratio: options.targetCompressionRatio,
-          coarse: options.coarse,
-          heuristic_chunking: options.heuristicChunking,
-          disable_placeholders: options.disablePlaceholders,
-        });
-
-        const response = await this.http.post<unknown>(
-          ENDPOINTS.COMPRESS_QS_BATCH,
-          request
-        );
-        return CompressBatchResponseSchema.parse(response);
-      }
+      const request = CompressBatchRequestSchema.parse({
+        inputs,
+        compression_model_name: options.compressionModelName ?? MODELS.LATTE,
+        target_compression_ratio: options.targetCompressionRatio,
+        coarse: options.coarse,
+        heuristic_chunking: options.heuristicChunking,
+        disable_placeholders: options.disablePlaceholders,
+        dynamic: options.dynamic,
+        dynamic_min_ratio: options.dynamicMinRatio,
+        dynamic_max_ratio: options.dynamicMaxRatio,
+      });
+      const response = await this.http.post<unknown>(ENDPOINTS.COMPRESS_BATCH, request);
+      return CompressBatchResponseSchema.parse(response);
     } catch (error) {
-      if (error instanceof ZodError) {
-        const firstError = error.errors[0];
-        throw new ValidationError(
-          firstError?.message ?? 'Validation failed',
-          firstError?.path.join('.')
-        );
-      }
-      throw error;
+      throw mapZodError(error);
     }
   }
+}
+
+function buildBatchInputs(options: CompressBatchOptions): BatchInput[] {
+  if (options.inputs !== undefined && options.contexts !== undefined) {
+    throw new ValidationError('Pass `inputs` OR `contexts`, not both.');
+  }
+  if (options.inputs !== undefined) {
+    return options.inputs.map((it) => ({
+      context: it.context,
+      ...(it.query !== undefined ? { query: it.query } : {}),
+    }));
+  }
+  if (options.contexts === undefined) {
+    throw new ValidationError('Must provide either `inputs` or `contexts`.');
+  }
+  const queryList = resolveQueryList(options.contexts, options.queries);
+  return options.contexts.map((context, i) => ({
+    context,
+    ...(queryList[i] !== undefined ? { query: queryList[i] } : {}),
+  }));
+}
+
+function resolveQueryList(
+  contexts: string[],
+  queries: string | string[] | undefined
+): Array<string | undefined> {
+  if (queries === undefined) {
+    return contexts.map(() => undefined);
+  }
+  if (typeof queries === 'string') {
+    return contexts.map(() => queries);
+  }
+  if (queries.length !== contexts.length) {
+    throw new ValidationError(
+      `Number of queries (${queries.length}) must match contexts (${contexts.length})`
+    );
+  }
+  return queries;
+}
+
+function mapZodError(error: unknown): unknown {
+  if (error instanceof ZodError) {
+    const first = error.errors[0];
+    return new ValidationError(
+      first?.message ?? 'Validation failed',
+      first?.path.join('.')
+    );
+  }
+  return error;
 }

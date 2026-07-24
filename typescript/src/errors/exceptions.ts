@@ -150,10 +150,6 @@ export class NotFoundError extends CompresrError {
   }
 }
 
-// =============================================================================
-// Budget & Credits Errors
-// =============================================================================
-
 /**
  * User has insufficient credits to complete the request
  */
@@ -234,10 +230,6 @@ export class ApiKeyBudgetError extends CompresrError {
   }
 }
 
-// =============================================================================
-// Model & Input Errors
-// =============================================================================
-
 /**
  * Requested model does not exist
  */
@@ -294,10 +286,6 @@ export class ContentPolicyError extends CompresrError {
     this.provider = provider;
   }
 }
-
-// =============================================================================
-// Service Errors
-// =============================================================================
 
 /**
  * Request timed out

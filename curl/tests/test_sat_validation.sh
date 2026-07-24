@@ -17,114 +17,92 @@ echo ""
 CONTEXT="Machine learning is a subset of AI. Deep learning uses neural networks. NLP processes language."
 QUERY="What is machine learning?"
 
-# Test 1: latte_v1 WITHOUT compression_ratio (should succeed)
-echo "1. Testing latte_v1 WITHOUT compression_ratio..."
+# Test 1: latte_v2 WITHOUT compression_ratio (should succeed)
+echo "1. Testing latte_v2 WITHOUT compression_ratio..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"latte_v1\",
+    \"compression_model_name\": \"latte_v2\",
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ latte_v1 without ratio succeeds (passed)"
+    echo "   ✓ latte_v2 without ratio succeeds (passed)"
     ((++PASSED))
 else
-    echo "   ✗ latte_v1 without ratio should succeed (failed)"
+    echo "   ✗ latte_v2 without ratio should succeed (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 2: latte_v1 WITH compression_ratio (should succeed)
-echo "2. Testing latte_v1 WITH compression_ratio..."
+# Test 2: latte_v2 WITH compression_ratio (should succeed)
+echo "2. Testing latte_v2 WITH compression_ratio..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"latte_v1\",
+    \"compression_model_name\": \"latte_v2\",
     \"target_compression_ratio\": 0.5,
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ latte_v1 with ratio succeeds (passed)"
+    echo "   ✓ latte_v2 with ratio succeeds (passed)"
     ((++PASSED))
 else
-    echo "   ✗ latte_v1 with ratio should succeed (failed)"
+    echo "   ✗ latte_v2 with ratio should succeed (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 3: latte_v1 WITH coarse=true (should succeed)
-echo "3. Testing latte_v1 WITH coarse=true (paragraph-level)..."
+# Test 3: latte_v2 WITH coarse=true (should succeed)
+echo "3. Testing latte_v2 WITH coarse=true (paragraph-level)..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"latte_v1\",
+    \"compression_model_name\": \"latte_v2\",
     \"coarse\": true,
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ latte_v1 with coarse=true succeeds (passed)"
+    echo "   ✓ latte_v2 with coarse=true succeeds (passed)"
     ((++PASSED))
 else
-    echo "   ✗ latte_v1 with coarse=true should succeed (failed)"
+    echo "   ✗ latte_v2 with coarse=true should succeed (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi
 echo ""
 
-# Test 4: latte_v1 WITH coarse=false (should succeed)
-echo "4. Testing latte_v1 WITH coarse=false (token-level)..."
+# Test 4: latte_v2 WITH coarse=false (should succeed)
+echo "4. Testing latte_v2 WITH coarse=false (token-level)..."
 RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-specific/" \
   -H "Content-Type: application/json" \
   -H "X-API-Key: $COMPRESR_API_KEY" \
   -d "{
     \"context\": \"$CONTEXT\",
     \"query\": \"$QUERY\",
-    \"compression_model_name\": \"latte_v1\",
+    \"compression_model_name\": \"latte_v2\",
     \"coarse\": false,
     \"source\": \"sdk:curl\"
   }")
 
 if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ latte_v1 with coarse=false succeeds (passed)"
+    echo "   ✓ latte_v2 with coarse=false succeeds (passed)"
     ((++PASSED))
 else
-    echo "   ✗ latte_v1 with coarse=false should succeed (failed)"
-    echo "   Response: $RESPONSE"
-    ((++FAILED))
-fi
-echo ""
-
-# Test 5: espresso_v1 (agnostic, no query)
-echo "5. Testing espresso_v1 (agnostic, no query)..."
-RESPONSE=$(curl -s -X POST "$BASE_URL/api/compress/question-agnostic/" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $COMPRESR_API_KEY" \
-  -d "{
-    \"context\": \"$CONTEXT\",
-    \"compression_model_name\": \"espresso_v1\",
-    \"target_compression_ratio\": 0.5,
-    \"source\": \"sdk:curl\"
-  }")
-
-if echo "$RESPONSE" | jq -e '.success == true' > /dev/null 2>&1; then
-    echo "   ✓ espresso_v1 succeeds (passed)"
-    ((++PASSED))
-else
-    echo "   ✗ espresso_v1 should succeed (failed)"
+    echo "   ✗ latte_v2 with coarse=false should succeed (failed)"
     echo "   Response: $RESPONSE"
     ((++FAILED))
 fi

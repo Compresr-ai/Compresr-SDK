@@ -1,0 +1,162 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{Python · LlamaIndex Integration}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK · Python}{LlamaIndex Integration}{%
+    Compress RAG context and chat memory inside LlamaIndex with a single
+    drop-in component. Smaller prompts, lower LLM spend, faster responses,
+    no changes to your retrievers or vector store.}
+
+% ===========================================================================
+\section{Install}
+
+\begin{shcode}
+pip install 'compresr[llamaindex]'
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+Requires \cprInlineCode{llama-index-core>=0.11}. The memory block additionally
+requires the \cprInlineCode{Memory} API (\cprInlineCode{llama-index-core>=0.12}).
+
+% ===========================================================================
+\section{Drop-in node postprocessor}
+
+Add \cprInlineCode{CompresrNodePostprocessor} to
+\cprInlineCode{as\_query\_engine()} and every retrieved node is rewritten
+with query-aware compression before the response synthesizer sees it.
+The query is read automatically from the active query engine.
+
+\begin{pycode}
+import os
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader
+from compresr.integrations.llamaindex import CompresrNodePostprocessor
+
+documents = SimpleDirectoryReader("docs/").load_data()
+index = VectorStoreIndex.from_documents(documents)
+
+compresr_pp = CompresrNodePostprocessor(
+    api_key=os.environ["COMPRESR_API_KEY"],
+    compression_model="latte_v1",     # query-specific model
+    target_compression_ratio=0.5,     # remove ~50% of tokens per node
+    min_tokens=200,                   # skip short nodes
+)
+
+query_engine = index.as_query_engine(
+    similarity_top_k=10,
+    node_postprocessors=[compresr_pp],
+)
+
+response = query_engine.query(
+    "What did the customer say about enterprise pricing?"
+)
+\end{pycode}
+
+Supports adaptive output budgets via \cprInlineCode{target\_token}.
+Fail-open by default: if the Compresr API is unavailable, your pipeline
+continues with the original nodes.
+
+% ===========================================================================
+\section{Memory block}
+
+Plug \cprInlineCode{CompresrMemoryBlock} into the LlamaIndex 2026
+\cprInlineCode{Memory} API to shrink chat history in place — no extra LLM
+summarization call, no dropped messages.
+
+\begin{pycode}
+import os
+from llama_index.core.memory import Memory
+from compresr.integrations.llamaindex import CompresrMemoryBlock
+
+memory = Memory.from_defaults(
+    session_id="user-42",
+    token_limit=8_000,
+    memory_blocks=[
+        CompresrMemoryBlock(
+            api_key=os.environ["COMPRESR_API_KEY"],
+            target_token=2_000,     # output budget in tokens
+            min_tokens=200,
+        )
+    ],
+)
+\end{pycode}
+
+% ===========================================================================
+\section{Tool wrapper}
+
+Wrap any \cprInlineCode{FunctionTool} so its return value is compressed
+before reaching the agent. Metadata (name, description, schema) is
+preserved.
+
+\begin{pycode}
+from llama_index.core.tools import FunctionTool
+from compresr.integrations.llamaindex import wrap_tool_with_compresr
+
+def search_crm(query: str) -> str:
+    """Search the CRM for a customer."""
+    return _do_search(query)
+
+tool = FunctionTool.from_defaults(fn=search_crm)
+wrapped = wrap_tool_with_compresr(
+    tool,
+    api_key=os.environ["COMPRESR_API_KEY"],
+    target_compression_ratio=0.5,
+    query_arg="query",   # use the tool's `query=` arg as compression query
+)
+
+from llama_index.core.agent.workflow import FunctionAgent
+agent = FunctionAgent(tools=[wrapped], llm=llm)
+\end{pycode}
+
+% ===========================================================================
+\section{Key parameters}
+
+\renewcommand{\arraystretch}{1.2}
+
+\begin{longtable}{@{}p{4.0cm} p{2.4cm} p{7.7cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\endhead
+
+\cprInlineCode{api\_key} & --- &
+Your Compresr API key. Or pass a pre-built \cprInlineCode{client}. \\
+
+\cprInlineCode{compression\_model} & \cprInlineCode{"latte\_v1"} &
+\cprInlineCode{latte\_v1} (default, query-specific) or
+\cprInlineCode{latte\_v2} (faster variant). \\
+
+\cprInlineCode{target\_compression\_ratio} & \cprInlineCode{0.5} &
+$[0,1]$ = fraction of tokens to remove (0.5 = remove $\sim$50\%).
+$>1$ = Nx factor (4 = $\sim$4x smaller). \\
+
+\cprInlineCode{target\_token} & \cprInlineCode{None} &
+Absolute output token budget per node or buffer. When set, overrides
+\cprInlineCode{target\_compression\_ratio}. \\
+
+\cprInlineCode{min\_tokens} & \cprInlineCode{200} &
+Skip compression when input is below this threshold. Token count is
+estimated as $\sim$\,\cprInlineCode{chars / 4} — close enough to filter
+small payloads without an extra tokenizer call. \\
+
+\cprInlineCode{coarse} & \cprInlineCode{None} &
+\cprInlineCode{True} = paragraph-level (faster).
+\cprInlineCode{False} = token-level (finer). \cprInlineCode{None} leaves
+the choice to the server's per-model default. \\
+
+\cprInlineCode{query} / \cprInlineCode{query\_arg} /
+\cprInlineCode{query\_extractor} & \cprInlineCode{None} &
+Override or extract the compression query (tool wrapper). Default lifts
+\cprInlineCode{query}, \cprInlineCode{question}, or similar kwargs
+automatically. \cprInlineCode{query\_extractor} is a callable
+\cprInlineCode{(kwargs: dict) -> str | None} — return \cprInlineCode{None}
+to fall back to the auto-default. \\
+
+\cprInlineCode{on\_error} & \cprInlineCode{"passthrough"} &
+\cprInlineCode{"passthrough"} = log and return original content on
+failure. \cprInlineCode{"raise"} = propagate. \\
+\bottomrule
+\end{longtable}
+
+\end{document}

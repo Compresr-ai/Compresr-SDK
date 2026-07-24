@@ -32,6 +32,11 @@ MANIFEST
 *.manifest
 *.spec
 
+# Per-SDK debug/session logs
+python/logs/
+typescript/logs/
+**/logs/
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
@@ -214,3 +219,6 @@ python/deploy_python_sdk.sh
 
 # macOS
 .DS_Store
+
+# Claude Code local config
+.claude/

@@ -1,45 +1,116 @@
-/**
- * Base HTTP client for Compresr API
- *
- * Uses native fetch API for Node.js 18+ and browser compatibility.
- */
+/** Base HTTP client for Compresr API. */
 import {
   API_KEY_PREFIX,
   DEFAULT_BASE_URL,
   DEFAULT_TIMEOUT,
-  STREAM_TIMEOUT,
   HEADERS,
 } from '../config/constants.js';
+import { getLogger } from '../logger.js';
 import {
   AuthenticationError,
   CompresrError,
   ConnectionError,
+  RateLimitError,
+  ServiceUnavailableError,
 } from '../errors/index.js';
 import { handleHttpError, type ErrorBody } from './errors.js';
+import {
+  computeBackoffMs,
+  resolveRetryConfig,
+  sleep,
+  type ResolvedRetryConfig,
+  type RetryConfig,
+} from './retry.js';
 import { SDK_VERSION } from '../version.js';
 
-/**
- * HTTP client configuration options
- */
-export interface HttpClientOptions {
-  /** API key (required) - must start with "cmp_" */
-  apiKey: string;
-  /** Base URL for API (optional, defaults to production) */
-  baseUrl?: string;
-  /** Request timeout in milliseconds (optional) */
-  timeout?: number;
+const MAX_RESPONSE_BYTES = 50 * 1024 * 1024;
+
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
+async function readBoundedJson<T>(response: Response): Promise<T> {
+  const cl = response.headers.get('content-length');
+  if (cl !== null) {
+    const declared = Number(cl);
+    if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
+      throw new CompresrError(
+        `Response too large: content-length ${declared} bytes exceeds ` +
+          `cap (${MAX_RESPONSE_BYTES} bytes).`,
+        'response_too_large'
+      );
+    }
+  }
+
+  if (!response.body) {
+    const text = await response.text();
+    if (text.length > MAX_RESPONSE_BYTES) {
+      throw new CompresrError(
+        `Response too large: ${text.length} bytes exceeds cap ` +
+          `(${MAX_RESPONSE_BYTES} bytes).`,
+        'response_too_large'
+      );
+    }
+    return parseJson<T>(text);
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) {
+      total += value.byteLength;
+      if (total > MAX_RESPONSE_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // ignored — best-effort cleanup
+        }
+        throw new CompresrError(
+          `Response too large: streamed ${total} bytes exceeds cap ` +
+            `(${MAX_RESPONSE_BYTES} bytes).`,
+          'response_too_large'
+        );
+      }
+      chunks.push(value);
+    }
+  }
+  const buf = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    buf.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return parseJson<T>(new TextDecoder().decode(buf));
 }
 
-/**
- * Internal HTTP client for all Compresr API requests
- */
+function parseJson<T>(text: string): T {
+  if (text.length === 0) {
+    return {} as T;
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch (err) {
+    throw new CompresrError(
+      `Failed to parse JSON response: ${err instanceof Error ? err.message : String(err)}`,
+      'invalid_response'
+    );
+  }
+}
+
+export interface HttpClientOptions {
+  apiKey: string;
+  baseUrl?: string;
+  timeout?: number;
+  retry?: RetryConfig;
+}
+
 export class HttpClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly timeout: number;
+  private readonly retryConfig: ResolvedRetryConfig;
 
   constructor(options: HttpClientOptions) {
-    // Validate API key
     if (!options.apiKey) {
       throw new AuthenticationError('API key is required');
     }
@@ -49,14 +120,42 @@ export class HttpClient {
       );
     }
 
+    const rawBase = options.baseUrl ?? DEFAULT_BASE_URL;
+    let parsed: URL;
+    try {
+      parsed = new URL(rawBase);
+    } catch {
+      throw new CompresrError(
+        `Invalid baseUrl: '${rawBase}' is not a valid URL.`,
+        'invalid_base_url'
+      );
+    }
+    if (
+      parsed.protocol === 'http:' &&
+      !LOCAL_HOSTNAMES.has(parsed.hostname)
+    ) {
+      const allow =
+        typeof process !== 'undefined' &&
+        process.env?.COMPRESR_ALLOW_INSECURE === '1';
+      if (!allow) {
+        throw new CompresrError(
+          `Refusing to send API key over cleartext http to '${rawBase}'. ` +
+            "Set COMPRESR_ALLOW_INSECURE=1 to override (dev only).",
+          'insecure_base_url'
+        );
+      }
+      getLogger().warn(
+        `baseUrl is ${parsed.protocol} — API key will be ` +
+          'transmitted in cleartext. Use HTTPS in production.'
+      );
+    }
+
     this.apiKey = options.apiKey;
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
+    this.baseUrl = rawBase.replace(/\/+$/, '');
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT;
+    this.retryConfig = resolveRetryConfig(options.retry);
   }
 
-  /**
-   * Get default headers for requests
-   */
   private get headers(): Record<string, string> {
     return {
       [HEADERS.API_KEY]: this.apiKey,
@@ -66,18 +165,20 @@ export class HttpClient {
     };
   }
 
-  /**
-   * Build full URL from endpoint
-   */
   private url(endpoint: string): string {
-    // Endpoint already starts with /, so no double slash issue
+    if (!endpoint.startsWith('/') || endpoint.includes('://')) {
+      throw new CompresrError(
+        `Invalid endpoint: '${endpoint}' must be a relative path starting with '/'.`,
+        'invalid_endpoint'
+      );
+    }
     return `${this.baseUrl}${endpoint}`;
   }
 
-  /**
-   * Make a POST request
-   */
-  async post<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
+  private async attemptPost<T>(
+    endpoint: string,
+    data: Record<string, unknown>
+  ): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
@@ -89,10 +190,20 @@ export class HttpClient {
         signal: controller.signal,
       });
 
-      const body = (await response.json()) as T | ErrorBody;
+      const body = await readBoundedJson<T | ErrorBody>(response);
 
       if (!response.ok) {
-        handleHttpError(response.status, body as ErrorBody);
+        const errorBody = body as ErrorBody;
+        if (errorBody.retry_after === undefined) {
+          const header = response.headers.get('Retry-After');
+          if (header !== null) {
+            const parsed = Number(header);
+            if (Number.isFinite(parsed)) {
+              errorBody.retry_after = parsed;
+            }
+          }
+        }
+        handleHttpError(response.status, errorBody);
       }
 
       return body as T;
@@ -112,89 +223,36 @@ export class HttpClient {
     }
   }
 
-  /**
-   * Make a GET request
-   */
-  async get<T>(endpoint: string): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(this.url(endpoint), {
-        method: 'GET',
-        headers: this.headers,
-        signal: controller.signal,
-      });
-
-      const body = (await response.json()) as T | ErrorBody;
-
-      if (!response.ok) {
-        handleHttpError(response.status, body as ErrorBody);
-      }
-
-      return body as T;
-    } catch (error) {
-      if (error instanceof CompresrError) {
-        throw error;
-      }
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new ConnectionError('Request timed out');
+  async post<T>(endpoint: string, data: Record<string, unknown>): Promise<T> {
+    const cfg = this.retryConfig;
+    let attempt = 0;
+    for (;;) {
+      try {
+        return await this.attemptPost<T>(endpoint, data);
+      } catch (err) {
+        const status =
+          err instanceof RateLimitError
+            ? 429
+            : err instanceof ServiceUnavailableError
+              ? 503
+              : null;
+        if (status === null || !cfg.retryOnStatus.has(status) || attempt >= cfg.maxRetries) {
+          throw err;
         }
-        throw new ConnectionError(`Connection failed: ${error.message}`);
+        const hint = (err as { retryAfter?: number }).retryAfter;
+        const delay = computeBackoffMs(attempt, cfg, hint);
+        if (delay > 0) await sleep(delay);
+        attempt += 1;
       }
-      throw new CompresrError(`Request failed: ${String(error)}`);
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
-  /**
-   * Make a DELETE request
-   */
-  async delete<T>(endpoint: string): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(this.url(endpoint), {
-        method: 'DELETE',
-        headers: this.headers,
-        signal: controller.signal,
-      });
-
-      const body = (await response.json()) as T | ErrorBody;
-
-      if (!response.ok) {
-        handleHttpError(response.status, body as ErrorBody);
-      }
-
-      return body as T;
-    } catch (error) {
-      if (error instanceof CompresrError) {
-        throw error;
-      }
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new ConnectionError('Request timed out');
-        }
-        throw new ConnectionError(`Connection failed: ${error.message}`);
-      }
-      throw new CompresrError(`Request failed: ${String(error)}`);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  /**
-   * Stream response from SSE endpoint
-   */
   async *stream(
     endpoint: string,
     data: Record<string, unknown>
   ): AsyncGenerator<string, void, undefined> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
     try {
       const response = await fetch(this.url(endpoint), {
@@ -208,7 +266,7 @@ export class HttpClient {
       });
 
       if (!response.ok) {
-        const body = (await response.json()) as ErrorBody;
+        const body = await readBoundedJson<ErrorBody>(response);
         handleHttpError(response.status, body);
       }
 
@@ -241,7 +299,6 @@ export class HttpClient {
                 yield parsed.content;
               }
             } catch {
-              // Yield raw content if not JSON
               if (chunk) {
                 yield chunk;
               }
@@ -260,55 +317,6 @@ export class HttpClient {
         throw new ConnectionError(`Stream failed: ${error.message}`);
       }
       throw new CompresrError(`Stream failed: ${String(error)}`);
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  /**
-   * Upload multipart form data (for index creation)
-   */
-  async postMultipart<T>(
-    endpoint: string,
-    files: Record<string, { data: Blob; filename: string; contentType: string }>
-  ): Promise<T> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), STREAM_TIMEOUT);
-
-    try {
-      const formData = new FormData();
-      for (const [key, file] of Object.entries(files)) {
-        formData.append(key, file.data, file.filename);
-      }
-
-      const response = await fetch(this.url(endpoint), {
-        method: 'POST',
-        headers: {
-          [HEADERS.API_KEY]: this.apiKey,
-          [HEADERS.USER_AGENT]: `compresr-typescript-sdk/${SDK_VERSION}`,
-        },
-        body: formData,
-        signal: controller.signal,
-      });
-
-      const body = (await response.json()) as T | ErrorBody;
-
-      if (!response.ok) {
-        handleHttpError(response.status, body as ErrorBody);
-      }
-
-      return body as T;
-    } catch (error) {
-      if (error instanceof CompresrError) {
-        throw error;
-      }
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new ConnectionError('Request timed out');
-        }
-        throw new ConnectionError(`Connection failed: ${error.message}`);
-      }
-      throw new CompresrError(`Request failed: ${String(error)}`);
     } finally {
       clearTimeout(timeoutId);
     }

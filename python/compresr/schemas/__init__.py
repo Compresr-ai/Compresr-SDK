@@ -1,34 +1,12 @@
+"""Compresr SDK schemas — mirror the backend.
+
+This module re-exports only Pydantic response models. Exception classes live
+in :mod:`compresr.exceptions` to keep the data-shape layer and the
+error-handling layer cleanly separated.
 """
-Compresr SDK Schemas
 
-Exact copies of schemas from backend.
-Single source of truth maintained in backend.
-"""
-
-from ..exceptions import (  # Response models; Exception classes
-    AuthenticationError,
-    AuthenticationErrorResponse,
-    CompresrError,
-    ConnectionError,
-    ConnectionErrorResponse,
-    ErrorResponse,
-    NotFoundError,
-    NotFoundErrorResponse,
-    RateLimitError,
-    RateLimitErrorResponse,
-    ScopeError,
-    ScopeErrorResponse,
-    ServerError,
-    ServerErrorResponse,
-    ValidationError,
-    ValidationErrorResponse,
-)
-
-# Import local schemas
 from .base import BaseResponse, MessageResponse
-from .inference import (  # Streaming; Compression; Agnostic Batch; Query-Specific Batch
-    AgnosticBatchInput,
-    AgnosticBatchRequest,
+from .inference import (
     CompressBatchInput,
     CompressBatchItemResult,
     CompressBatchRequest,
@@ -39,55 +17,20 @@ from .inference import (  # Streaming; Compression; Agnostic Batch; Query-Specif
     CompressResult,
     StreamChunk,
 )
-from .tool_discovery import (
-    DeferredTool,
-    ToolDiscoverySearchRequest,
-    ToolDiscoverySearchResponse,
-)
 from .usage import MoneyBalanceResponse, MoneyBalanceResult
 
 __all__ = [
-    # Base
     "BaseResponse",
     "MessageResponse",
-    # Response models
-    "ErrorResponse",
-    "ValidationErrorResponse",
-    "AuthenticationErrorResponse",
-    "RateLimitErrorResponse",
-    "ScopeErrorResponse",
-    "ServerErrorResponse",
-    "NotFoundErrorResponse",
-    "ConnectionErrorResponse",
-    # Exception classes
-    "CompresrError",
-    "AuthenticationError",
-    "RateLimitError",
-    "ValidationError",
-    "ScopeError",
-    "ServerError",
-    "NotFoundError",
-    "ConnectionError",
-    # Streaming
     "StreamChunk",
-    # Compression
     "CompressRequest",
     "CompressResponse",
     "CompressResult",
-    # Agnostic Batch Compression
-    "AgnosticBatchInput",
-    "AgnosticBatchRequest",
-    # Query-Specific Batch Compression
     "CompressBatchInput",
     "CompressBatchRequest",
     "CompressBatchResult",
     "CompressBatchItemResult",
     "CompressBatchResponse",
-    # Tool Discovery
-    "DeferredTool",
-    "ToolDiscoverySearchRequest",
-    "ToolDiscoverySearchResponse",
-    # Usage
     "MoneyBalanceResponse",
     "MoneyBalanceResult",
 ]

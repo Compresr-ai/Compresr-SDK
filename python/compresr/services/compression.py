@@ -1,32 +1,15 @@
-"""
-CompressionClient - Token-level context compression.
+"""``CompressionClient`` — query-aware context compression.
 
-Compresses context text to reduce token count before sending to LLMs.
-Supports both agnostic (no query) and query-specific compression.
-
-Models:
-    - espresso_v1 (default): Agnostic compression, no query needed
-    - latte_v1: Query-specific compression, query REQUIRED
-
-Endpoints:
-    Single:
-        /compress/question-agnostic/     - context: str (no query)
-        /compress/question-specific/     - context: str, query: str
-    Batch:
-        /compress/question-agnostic/batch - inputs: List[{context}]
-        /compress/question-specific/batch - inputs: List[{context, query}]
-    Stream:
-        /compress/question-agnostic/stream - context: str
-        /compress/question-specific/stream - context: str, query: str
+Only the question-specific endpoints are exposed; pass any
+``compression_model_name`` you've enabled on the backend.
 """
 
-from typing import Generator, List, Optional, Union
+from typing import Any, Dict, Generator, List, Optional, Union
 
 from ..config import ENDPOINTS
 from ..exceptions import ValidationError
+from ..retry import RetryConfig
 from ..schemas import (
-    AgnosticBatchInput,
-    AgnosticBatchRequest,
     CompressBatchInput,
     CompressBatchRequest,
     CompressBatchResponse,
@@ -35,335 +18,399 @@ from ..schemas import (
 )
 from .base import BaseCompressionClient
 
+BatchInput = Union[CompressBatchInput, Dict[str, Any]]
+
 
 class CompressionClient(BaseCompressionClient):
-    """
-    Token-level compression client - compress context to reduce token costs.
-
-    Models:
-    - espresso_v1 (default): Agnostic compression, no query needed
-    - latte_v1: Query-specific compression, query REQUIRED
+    """Compresr compression client.
 
     Args:
-        api_key: Your Compresr API key (required) - "cmp_..."
-        base_url: API base URL (optional) - defaults to https://api.compresr.ai
-                  Use for on-prem deployments, e.g., "http://localhost:8000"
-        timeout: Request timeout in seconds (optional)
+        api_key: ``cmp_...`` API key.
+        base_url: API base URL (defaults to ``https://api.compresr.ai``).
+        timeout: Request timeout in seconds.
+        llm: Optional provider selector to opt into the provider-shape
+            facades (``.messages``, ``.chat``, ``.run``). Use just the
+            provider (``"anthropic"``) and pass ``model=`` at the call
+            site, or pin a default with ``"anthropic:claude-haiku-4-5"``.
+        llm_api_key: Optional provider API key forwarded to the LLM.
+        compression: Optional dict of :class:`CompressionPolicy` kwargs
+            (e.g. ``{"target_compression_ratio": 0.7, "min_tokens": 1000}``).
+        enable_prompt_cache: Provider-aware prompt-cache control. Default ``True``.
+            Anthropic → wires ``AnthropicPromptCachingMiddleware``.
+            OpenAI → attaches ``prompt_cache_key`` (when set) and maps
+            ``prompt_cache_ttl="1h"`` to ``prompt_cache_retention="24h"``.
+            Gemini → no-op for now (implicit caching always on at the API).
+        prompt_cache_ttl: ``"5m"`` or ``"1h"``. Anthropic uses it as the
+            ephemeral cache TTL. OpenAI maps ``"1h"`` to the 24h retention tier.
+        prompt_cache_min_messages: Skip Anthropic cache stamping until the
+            conversation has at least this many messages.
+        openai_prompt_cache_key: Optional routing key for OpenAI prompt caching
+            (improves hit rate when multiple clients share a backend). Ignored
+            for non-OpenAI providers.
+        llm_http_client: Optional ``httpx.Client`` for the LLM provider transport
+            (Anthropic/OpenAI). Use for corporate proxies, custom CA bundles, mTLS,
+            or ``verify`` settings — e.g. ``httpx.Client(verify="/path/corp-ca.pem")``.
+            This is for the downstream LLM calls, not the Compresr API transport.
+            Requires langchain-anthropic with ``http_client`` support; OpenAI
+            already supports it.
+        llm_http_async_client: Optional ``httpx.AsyncClient``, the async counterpart
+            to ``llm_http_client``.
 
-    Example:
+    Example::
+
         from compresr import CompressionClient
-
         client = CompressionClient(api_key="cmp_...")
-
-        # Single agnostic compression
-        response = client.compress(context="Your long context text...")
-
-        # Single query-specific compression
-        response = client.compress(
-            context="Your long context text...",
+        result = client.compress(
+            context="Long passage...",
             query="What is the main conclusion?",
-            compression_model_name="latte_v1",
         )
 
-        # Batch agnostic compression
-        response = client.compress_batch(
-            contexts=["Doc 1...", "Doc 2...", "Doc 3..."],
+        # Opt into the Anthropic-shaped facade — model lives at the call site:
+        agent = CompressionClient(
+            api_key="cmp_...",
+            llm="anthropic",
+            llm_api_key="sk-ant-...",
         )
-
-        # Batch query-specific compression
-        response = client.compress_batch(
-            contexts=["Doc 1...", "Doc 2...", "Doc 3..."],
-            queries="What are the key points?",
-            compression_model_name="latte_v1",
+        msg = agent.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "hi"}],
         )
     """
 
-    # ==================== Single Compression ====================
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        timeout: Optional[int] = None,
+        *,
+        retry_config: Optional[RetryConfig] = None,
+        llm: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        compression: Optional[Dict[str, Any]] = None,
+        enable_prompt_cache: bool = True,
+        prompt_cache_ttl: str = "5m",
+        prompt_cache_min_messages: int = 2,
+        openai_prompt_cache_key: Optional[str] = None,
+        llm_http_client: Any = None,
+        llm_http_async_client: Any = None,
+    ):
+        super().__init__(
+            api_key=api_key, base_url=base_url, timeout=timeout, retry_config=retry_config
+        )
+        self._engine = None
+        if llm is not None:
+            # Lazy import: ``CompressionClient(api_key=...)`` without ``llm=``
+            # must keep working when langchain isn't installed.
+            from compresr.agents.engine import _Engine
+            from compresr.integrations._shared import CompressionPolicy
+
+            policy = CompressionPolicy(**(compression or {}))
+            self._engine = _Engine(
+                compresr_client=self,
+                llm=llm,
+                llm_api_key=llm_api_key,
+                policy=policy,
+                enable_prompt_cache=enable_prompt_cache,
+                prompt_cache_ttl=prompt_cache_ttl,
+                prompt_cache_min_messages=prompt_cache_min_messages,
+                openai_prompt_cache_key=openai_prompt_cache_key,
+                llm_http_client=llm_http_client,
+                llm_http_async_client=llm_http_async_client,
+            )
+        self._research_facade: Optional[Any] = None
+
+    @property
+    def research(self) -> Any:
+        """Research facade: ``client.research.run("question")``. Requires ``llm=``."""
+        if self._research_facade is None:
+            if self._engine is None:
+                from ..exceptions import CompresrError
+
+                raise CompresrError(
+                    "client.research requires an LLM provider. "
+                    "Construct with CompressionClient(api_key=..., llm='anthropic:...', llm_api_key=...).",
+                    code="missing_llm",
+                )
+            from ..agents.research.facade import ResearchFacade
+
+            self._research_facade = ResearchFacade(self._engine)
+        return self._research_facade
 
     def compress(
         self,
         context: str,
-        compression_model_name: str = "espresso_v1",
         query: Optional[str] = None,
+        compression_model_name: str = "latte_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
         heuristic_chunking: Optional[bool] = None,
         disable_placeholders: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
+        dynamic_min_ratio: Optional[float] = None,
+        dynamic_max_ratio: Optional[float] = None,
     ) -> CompressResponse:
-        """
-        Compress a single context (sync).
-
-        For multiple contexts, use compress_batch().
-
-        Args:
-            context: Context text to compress (single string)
-            compression_model_name: Compression model to use
-                - "espresso_v1" (default): No query needed
-                - "latte_v1": Query REQUIRED
-            query: Query for query-specific compression (required for latte_v1)
-            target_compression_ratio: Ratio 0.1-0.9 (percentage to REMOVE)
-            coarse: Paragraph-level compression (only for query-specific with latte_v1).
-                    - True: faster, paragraph-level (default for latte_v1)
-                    - False: slower, token-level (finer grained)
-                    - None: use backend default
-                    Ignored for agnostic compression (no query).
-            heuristic_chunking: Use heuristic chunking for structure preservation.
-                    Only for query-specific models. Ignored for agnostic.
-            disable_placeholders: Disable placeholder tokens in output.
-                    Only for query-specific models. Ignored for agnostic.
-
-        Returns:
-            CompressResponse with compressed context and metrics
-        """
         req = self._build_request(
             context,
-            compression_model_name,
             query,
+            compression_model_name,
             target_compression_ratio,
             coarse,
             heuristic_chunking,
             disable_placeholders,
+            dynamic,
+            dynamic_min_ratio,
+            dynamic_max_ratio,
         )
-        endpoint, _ = self._resolve_endpoints(compression_model_name, query)
-        return self._do_request(endpoint, req)
+        return self._do_request(req)
 
     async def compress_async(
         self,
         context: str,
-        compression_model_name: str = "espresso_v1",
         query: Optional[str] = None,
+        compression_model_name: str = "latte_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
         heuristic_chunking: Optional[bool] = None,
         disable_placeholders: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
+        dynamic_min_ratio: Optional[float] = None,
+        dynamic_max_ratio: Optional[float] = None,
     ) -> CompressResponse:
-        """
-        Compress a single context (async).
-
-        For multiple contexts, use compress_batch_async().
-
-        Args:
-            context: Context text to compress (single string)
-            compression_model_name: Compression model to use
-            query: Query for query-specific compression (required for latte_v1)
-            target_compression_ratio: Target ratio (optional)
-            coarse: Paragraph-level compression (only for query-specific with latte_v1).
-                    Ignored for agnostic compression (no query).
-            heuristic_chunking: Use heuristic chunking for structure preservation.
-            disable_placeholders: Disable placeholder tokens in output.
-
-        Returns:
-            CompressResponse with compressed context and metrics
-        """
         req = self._build_request(
             context,
-            compression_model_name,
             query,
+            compression_model_name,
             target_compression_ratio,
             coarse,
             heuristic_chunking,
             disable_placeholders,
+            dynamic,
+            dynamic_min_ratio,
+            dynamic_max_ratio,
         )
-        endpoint, _ = self._resolve_endpoints(compression_model_name, query)
-        return await self._do_request_async(endpoint, req)
+        return await self._do_compress_async(req)
 
     def compress_stream(
         self,
         context: str,
-        compression_model_name: str = "espresso_v1",
         query: Optional[str] = None,
+        compression_model_name: str = "latte_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
         heuristic_chunking: Optional[bool] = None,
         disable_placeholders: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
+        dynamic_min_ratio: Optional[float] = None,
+        dynamic_max_ratio: Optional[float] = None,
     ) -> Generator[StreamChunk, None, None]:
-        """
-        Stream compression (sync).
-
-        Args:
-            context: Context text to compress (single string)
-            compression_model_name: Compression model to use
-            query: Query for query-specific compression (required for latte_v1)
-            target_compression_ratio: Target ratio (optional)
-            coarse: Paragraph-level compression (only for query-specific with latte_v1).
-                    Ignored for agnostic compression (no query).
-            heuristic_chunking: Use heuristic chunking for structure preservation.
-            disable_placeholders: Disable placeholder tokens in output.
-
-        Yields:
-            StreamChunk objects with compressed content
-        """
         req = self._build_request(
             context,
-            compression_model_name,
             query,
+            compression_model_name,
             target_compression_ratio,
             coarse,
             heuristic_chunking,
             disable_placeholders,
+            dynamic,
+            dynamic_min_ratio,
+            dynamic_max_ratio,
         )
-        _, stream_endpoint = self._resolve_endpoints(compression_model_name, query)
-        yield from self._do_stream(stream_endpoint, req)
-
-    # ==================== Batch Compression ====================
+        yield from self._do_stream(req)
 
     def compress_batch(
         self,
-        contexts: List[str],
+        contexts: Optional[List[str]] = None,
         queries: Optional[Union[str, List[str]]] = None,
-        compression_model_name: str = "espresso_v1",
+        inputs: Optional[List[BatchInput]] = None,
+        compression_model_name: str = "latte_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
         heuristic_chunking: Optional[bool] = None,
         disable_placeholders: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
+        dynamic_min_ratio: Optional[float] = None,
+        dynamic_max_ratio: Optional[float] = None,
     ) -> CompressBatchResponse:
+        """Batch compress up to 100 contexts.
+
+        Two equivalent input forms:
+
+        - **Convenience form**: ``contexts=[...]`` plus ``queries`` as a single
+          string (applied to all contexts) or a list (one query per context).
+        - **Pair form** (matches the wire format): ``inputs=[{"context": ...,
+          "query": ...}, ...]``.
+
+        Pass exactly one of ``inputs`` or ``contexts``.
         """
-        Batch compress multiple contexts (sync).
-
-        - If queries is None: uses agnostic endpoint (no queries required)
-        - If queries is provided: uses query-specific endpoint
-
-        Args:
-            contexts: List of context strings to compress (1-100 items)
-            queries: Either:
-                - None: agnostic compression (no queries)
-                - Single query string (same for all contexts)
-                - List of queries (one per context, must match contexts length)
-            compression_model_name: Compression model to use
-            target_compression_ratio: Target ratio (optional): 0-1 or >1 for Nx
-            coarse: Paragraph-level compression (only for query-specific batch).
-                    Ignored for agnostic batch (queries=None).
-            heuristic_chunking: Use heuristic chunking for structure preservation.
-                    Only for query-specific batch. Ignored for agnostic.
-            disable_placeholders: Disable placeholder tokens in output.
-                    Only for query-specific batch. Ignored for agnostic.
-
-        Returns:
-            CompressBatchResponse with results for each context and aggregated metrics
-
-        Example - agnostic batch:
-            response = client.compress_batch(
-                contexts=["Doc 1...", "Doc 2...", "Doc 3..."],
-            )
-
-        Example - query-specific batch (same query):
-            response = client.compress_batch(
-                contexts=["Doc 1...", "Doc 2...", "Doc 3..."],
-                queries="What are the key points?",
-                compression_model_name="latte_v1",
-            )
-
-        Example - query-specific batch (different queries):
-            response = client.compress_batch(
-                contexts=["ML doc...", "NLP doc...", "CV doc..."],
-                queries=["What is ML?", "What is NLP?", "What is CV?"],
-                compression_model_name="latte_v1",
-            )
-        """
-        if queries is None:
-            # Agnostic batch (no queries)
-            agnostic_inputs = [AgnosticBatchInput(context=ctx) for ctx in contexts]
-            agnostic_req = AgnosticBatchRequest(
-                inputs=agnostic_inputs,
-                compression_model_name=compression_model_name,
-                target_compression_ratio=target_compression_ratio,
-            )
-            data = self.post(
-                ENDPOINTS.COMPRESS_AGNOSTIC_BATCH, agnostic_req.model_dump(exclude_none=True)
-            )
-        else:
-            # Query-specific batch
-            if isinstance(queries, str):
-                query_list = [queries] * len(contexts)
-            else:
-                if len(queries) != len(contexts):
-                    raise ValidationError(
-                        f"Number of queries ({len(queries)}) must match number of contexts ({len(contexts)})"
-                    )
-                query_list = queries
-
-            qs_inputs = [
-                CompressBatchInput(context=ctx, query=q) for ctx, q in zip(contexts, query_list)
-            ]
-            qs_req = CompressBatchRequest(
-                inputs=qs_inputs,
-                compression_model_name=compression_model_name,
-                target_compression_ratio=target_compression_ratio,
-                coarse=coarse,
-                heuristic_chunking=heuristic_chunking,
-                disable_placeholders=disable_placeholders,
-            )
-            data = self.post(ENDPOINTS.COMPRESS_QS_BATCH, qs_req.model_dump(exclude_none=True))
-
+        items = self._build_batch_inputs(contexts, queries, inputs)
+        req = CompressBatchRequest(
+            inputs=items,
+            compression_model_name=compression_model_name,
+            target_compression_ratio=target_compression_ratio,
+            coarse=coarse,
+            heuristic_chunking=heuristic_chunking,
+            disable_placeholders=disable_placeholders,
+            dynamic=dynamic,
+            dynamic_min_ratio=dynamic_min_ratio,
+            dynamic_max_ratio=dynamic_max_ratio,
+        )
+        data = self.post(ENDPOINTS.COMPRESS_BATCH, req.model_dump(exclude_none=True))
         return CompressBatchResponse.model_validate(data)
 
     async def compress_batch_async(
         self,
-        contexts: List[str],
+        contexts: Optional[List[str]] = None,
         queries: Optional[Union[str, List[str]]] = None,
-        compression_model_name: str = "espresso_v1",
+        inputs: Optional[List[BatchInput]] = None,
+        compression_model_name: str = "latte_v1",
         target_compression_ratio: Optional[float] = None,
         coarse: Optional[bool] = None,
         heuristic_chunking: Optional[bool] = None,
         disable_placeholders: Optional[bool] = None,
+        dynamic: Optional[bool] = None,
+        dynamic_min_ratio: Optional[float] = None,
+        dynamic_max_ratio: Optional[float] = None,
     ) -> CompressBatchResponse:
-        """
-        Batch compress multiple contexts (async).
-
-        - If queries is None: uses agnostic endpoint (no queries required)
-        - If queries is provided: uses query-specific endpoint
-
-        Args:
-            contexts: List of context strings to compress (1-100 items)
-            queries: Either:
-                - None: agnostic compression (no queries)
-                - Single query string (same for all contexts)
-                - List of queries (one per context, must match contexts length)
-            compression_model_name: Compression model to use
-            target_compression_ratio: Target ratio (optional): 0-1 or >1 for Nx
-            coarse: Paragraph-level compression (only for query-specific batch).
-                    Ignored for agnostic batch (queries=None).
-            heuristic_chunking: Use heuristic chunking for structure preservation.
-            disable_placeholders: Disable placeholder tokens in output.
-
-        Returns:
-            CompressBatchResponse with results for each context and aggregated metrics
-        """
-        if queries is None:
-            # Agnostic batch (no queries)
-            agnostic_inputs = [AgnosticBatchInput(context=ctx) for ctx in contexts]
-            agnostic_req = AgnosticBatchRequest(
-                inputs=agnostic_inputs,
-                compression_model_name=compression_model_name,
-                target_compression_ratio=target_compression_ratio,
-            )
-            data = await self.post_async(
-                ENDPOINTS.COMPRESS_AGNOSTIC_BATCH, agnostic_req.model_dump(exclude_none=True)
-            )
-        else:
-            # Query-specific batch
-            if isinstance(queries, str):
-                query_list = [queries] * len(contexts)
-            else:
-                if len(queries) != len(contexts):
-                    raise ValidationError(
-                        f"Number of queries ({len(queries)}) must match number of contexts ({len(contexts)})"
-                    )
-                query_list = queries
-
-            qs_inputs = [
-                CompressBatchInput(context=ctx, query=q) for ctx, q in zip(contexts, query_list)
-            ]
-            qs_req = CompressBatchRequest(
-                inputs=qs_inputs,
-                compression_model_name=compression_model_name,
-                target_compression_ratio=target_compression_ratio,
-                coarse=coarse,
-                heuristic_chunking=heuristic_chunking,
-                disable_placeholders=disable_placeholders,
-            )
-            data = await self.post_async(
-                ENDPOINTS.COMPRESS_QS_BATCH, qs_req.model_dump(exclude_none=True)
-            )
-
+        items = self._build_batch_inputs(contexts, queries, inputs)
+        req = CompressBatchRequest(
+            inputs=items,
+            compression_model_name=compression_model_name,
+            target_compression_ratio=target_compression_ratio,
+            coarse=coarse,
+            heuristic_chunking=heuristic_chunking,
+            disable_placeholders=disable_placeholders,
+            dynamic=dynamic,
+            dynamic_min_ratio=dynamic_min_ratio,
+            dynamic_max_ratio=dynamic_max_ratio,
+        )
+        data = await self.post_async(ENDPOINTS.COMPRESS_BATCH, req.model_dump(exclude_none=True))
         return CompressBatchResponse.model_validate(data)
+
+    @staticmethod
+    def _build_batch_inputs(
+        contexts: Optional[List[str]],
+        queries: Optional[Union[str, List[str]]],
+        inputs: Optional[List[BatchInput]],
+    ) -> List[CompressBatchInput]:
+        if inputs is not None and contexts is not None:
+            raise ValidationError("Pass `inputs` OR `contexts`, not both.")
+        if inputs is not None:
+            return [
+                item if isinstance(item, CompressBatchInput) else CompressBatchInput(**item)
+                for item in inputs
+            ]
+        if contexts is None:
+            raise ValidationError("Must provide either `inputs` or `contexts`.")
+        query_list = CompressionClient._resolve_query_list(contexts, queries)
+        return [CompressBatchInput(context=ctx, query=q) for ctx, q in zip(contexts, query_list)]
+
+    @staticmethod
+    def _resolve_query_list(
+        contexts: List[str],
+        queries: Optional[Union[str, List[str]]],
+    ) -> List[Optional[str]]:
+        if queries is None:
+            return [None] * len(contexts)
+        if isinstance(queries, str):
+            return [queries] * len(contexts)
+        if len(queries) != len(contexts):
+            raise ValidationError(
+                f"Number of queries ({len(queries)}) must match contexts ({len(contexts)})"
+            )
+        return list(queries)
+
+    @property
+    def messages(self) -> Any:
+        """Anthropic-shaped facade: ``client.messages.create(...)``."""
+        self._require_engine("messages.create")
+        if not hasattr(self, "_anthropic_facade"):
+            from compresr.agents.facades.anthropic import _Anthropic
+
+            self._anthropic_facade = _Anthropic(self._engine)
+        return self._anthropic_facade.messages
+
+    @property
+    def chat(self) -> Any:
+        """OpenAI-shaped facade: ``client.chat.completions.create(...)``."""
+        self._require_engine("chat.completions.create")
+        if not hasattr(self, "_openai_facade"):
+            from compresr.agents.facades.openai import _OpenAI
+
+            self._openai_facade = _OpenAI(self._engine)
+        return self._openai_facade.chat
+
+    def run(
+        self,
+        *,
+        prompt: str,
+        tools: Optional[list] = None,
+        system: Optional[Any] = None,
+        max_tokens: int = 4096,
+        model: Optional[str] = None,
+        **kw: Any,
+    ) -> Any:
+        """Native facade — returns :class:`NormalizedResult` directly.
+
+        ``model`` overrides the constructor default; if neither is set the
+        engine raises a clear :class:`CompresrError`.
+        """
+        self._require_engine("run")
+        if not hasattr(self, "_native_facade"):
+            from compresr.agents.facades.native import _Native
+
+            self._native_facade = _Native(self._engine)
+        return self._native_facade(
+            prompt=prompt,
+            tools=tools,
+            system=system,
+            max_tokens=max_tokens,
+            model=model,
+            **kw,
+        )
+
+    async def arun(
+        self,
+        *,
+        prompt: str,
+        tools: Optional[list] = None,
+        system: Optional[Any] = None,
+        max_tokens: int = 4096,
+        model: Optional[str] = None,
+        **kw: Any,
+    ) -> Any:
+        """Async native facade — returns :class:`NormalizedResult` directly."""
+        self._require_engine("arun")
+        if not hasattr(self, "_native_facade"):
+            from compresr.agents.facades.native import _Native
+
+            self._native_facade = _Native(self._engine)
+        return await self._native_facade.arun(
+            prompt=prompt,
+            tools=tools,
+            system=system,
+            max_tokens=max_tokens,
+            model=model,
+            **kw,
+        )
+
+    def _require_engine(self, surface: str) -> None:
+        """Guard the facade surfaces with a clear opt-in error."""
+        if self._engine is None:
+            from compresr.exceptions import CompresrError
+
+            raise CompresrError(
+                f"CompressionClient.{surface} requires an LLM provider. "
+                f"Construct with CompressionClient(api_key='cmp_...', "
+                f"llm='anthropic', llm_api_key='sk-ant-...')."
+            )
+
+    async def aclose(self) -> None:
+        """Close the underlying async HTTP client and release its pool."""
+        await super().aclose()
+
+    async def __aenter__(self) -> "CompressionClient":
+        return self
+
+    async def __aexit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+        await self.aclose()

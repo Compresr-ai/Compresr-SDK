@@ -1,0 +1,26 @@
+{
+  "model": "demo-model",
+  "messages": [
+    { "role": "system", "content": "You are a financial analyst. Answer concisely." },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_q4",
+          "type": "function",
+          "function": {
+            "name": "get_earnings_report",
+            "arguments": "{\"company\":\"Acme\",\"quarter\":\"Q4-2024\"}"
+          }
+        }
+      ]
+    },
+    {
+      "role": "tool",
+      "tool_call_id": "call_q4",
+      "content": "Q4 2024 earnings overview for Acme Corp. Revenue grew 18% year over year to $12.3B, driven by enterprise software subscriptions and data infrastructure spend. Operating margin expanded 220 basis points to 31.4%, helped by fixed-cost leverage and slower hiring in non-product functions. Free cash flow was $3.1B, up from $2.4B a year earlier. The company repurchased $1.8B of stock during the quarter and ended with $14.2B in net cash. Management raised full-year guidance for FY25 revenue growth to 15-17% from a prior 13-15%, citing continued momentum in AI platform attach and renewed enterprise IT budgets. Headcount declined 1% sequentially as restructuring announced last quarter completed. Gross retention held above 95% across the top-300 customer cohort, and net retention came in at 118%. The CFO highlighted that about 40% of new ARR closed in Q4 attached AI products, up from roughly 25% a year earlier, with no meaningful cannibalization of the core platform business. Capex stepped up 28% year over year to support AI training capacity, and the company guided to capex growth of 35-40% in FY25. R&D spend accelerated to 19% of revenue. Stock-based compensation was 14.2% of revenue, down 80 basis points year over year."
+    },
+    { "role": "user", "content": "What was Acme's Q4 revenue growth and net retention?" }
+  ]
+}

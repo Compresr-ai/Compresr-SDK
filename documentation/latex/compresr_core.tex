@@ -1,0 +1,225 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{Compresr SDK · Core}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK}{Core Usage}{%
+    Query-aware LLM context compression for Python and TypeScript. Drop
+    \textbf{30–70\% of the tokens} you send to GPT, Claude, or Gemini
+    without losing the answer your user actually asked for.}
+
+% ===========================================================================
+\section{Why Compresr}
+
+Most LLM context is wasted. Retrieved snippets, tool outputs, and chat
+history carry far more text than the model needs to answer the question
+in front of it. Compresr reads your context \emph{together with the
+query} and returns a shorter version that keeps the answer-bearing
+content and trims the rest. Same passage, two different questions, two
+different compressions — and 30–70\% fewer tokens billed by your model
+provider.
+
+One cloud API, two thin SDKs. Same on-the-wire contract. Call
+\cprInlineCode{compress(...)} and ship.
+
+% ===========================================================================
+\section{Install \& quick start}
+
+Python 3.9+ and Node 20+ are the only requirements. Grab an API key
+(prefix \cprInlineCode{cmp\_}) from
+\href{https://compresr.ai}{compresr.ai}.
+
+\begin{shcode}
+pip install compresr             # Python
+npm install @compresr/sdk        # TypeScript
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+\textbf{Python}
+\begin{pycode}
+from compresr import CompressionClient, RateLimitError
+
+client = CompressionClient()             # picks up COMPRESR_API_KEY
+try:
+    result = client.compress(
+        context="Long passage to compress...",
+        query="What is the main conclusion?",
+        target_compression_ratio=0.5,    # drop ~50% of tokens
+    )
+except RateLimitError:
+    result = None                        # back off, retry, or fall through
+
+if result and result.success:
+    print(result.data.tokens_saved, result.data.compressed_context)
+else:
+    print("compression skipped:", getattr(result, "error", "n/a"))
+\end{pycode}
+
+\textbf{TypeScript}
+\begin{tscode}
+import { CompressionClient } from '@compresr/sdk';
+
+const client = new CompressionClient();   // picks up COMPRESR_API_KEY
+const result = await client.compress({
+  context: 'Long passage to compress...',
+  query: 'What is the main conclusion?',
+  targetCompressionRatio: 0.5,
+});
+if (result.success) {
+  console.log(result.data.tokens_saved, result.data.compressed_context);
+} else {
+  console.warn('compression skipped:', result.error);
+}
+\end{tscode}
+
+The response carries the compressed text, original and compressed token
+counts, achieved ratio, and call duration — everything you need to log
+savings and prove ROI to your finance team. Typed exceptions
+(\cprInlineCode{RateLimitError}, \cprInlineCode{ModelNotFoundError},
+\ldots) let you branch on intent, and transient \cprInlineCode{429}/\cprInlineCode{503}
+responses retry automatically with jittered backoff.
+
+% ===========================================================================
+\section{Batch and async}
+
+Compress up to \textbf{100 contexts per call} for RAG indexing, replay
+jobs, or batch evals. Use one shared query, or pair each context with
+its own. Python is sync-first with full async equivalents; TypeScript
+is async-only.
+
+\textbf{Python}
+\begin{pycode}
+# One shared query
+batch = client.compress_batch(
+    contexts=["Doc 1...", "Doc 2..."],
+    queries="What is self-attention?",
+)
+# Or per-context queries
+batch = client.compress_batch(inputs=[
+    {"context": "Doc A...", "query": "What is X?"},
+    {"context": "Doc B...", "query": "What is Y?"},
+])
+
+# Async on the same client
+async with CompressionClient(api_key="cmp_...") as c:
+    result = await c.compress_async(context="...", query="...")
+\end{pycode}
+
+\textbf{TypeScript}
+\begin{tscode}
+const batch = await client.compressBatch({
+  contexts: ['Doc 1...', 'Doc 2...'],
+  queries: 'What is self-attention?',
+});
+const batch2 = await client.compressBatch({ inputs: [
+  { context: 'Doc A...', query: 'What is X?' },
+  { context: 'Doc B...', query: 'What is Y?' },
+]});
+\end{tscode}
+
+Streaming (\cprInlineCode{compress\_stream} / \cprInlineCode{compressStream})
+is available on both SDKs when you want to render compressed output as
+it arrives.
+
+% ===========================================================================
+\section{Key parameters}\label{sec:params}
+
+Every compress call takes the same knobs. Defaults are filled by the
+backend so you can start with two arguments and tune later.
+
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{@{}p{4.0cm} p{2.2cm} p{7.6cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{What it does} \\
+\midrule
+\endhead
+
+\cprInlineCode{context} & required &
+The text you want shorter. \\
+
+\cprInlineCode{query} & \cprInlineCode{None} &
+The question your LLM is answering. Drives what's kept vs. dropped. \\
+
+\cprInlineCode{target\_compression\_ratio} \newline
+(TS: \cprInlineCode{targetCompressionRatio}) &
+backend default &
+\cprInlineCode{0–1} = fraction of tokens to remove
+(\cprInlineCode{0.5} drops $\sim$50\%). \cprInlineCode{>1} = Nx factor
+(\cprInlineCode{4} = $\sim$4$\times$ smaller). \\
+
+\cprInlineCode{coarse} & backend default &
+\cprInlineCode{true} = paragraph-level (faster);
+\cprInlineCode{false} = token-level (finer, slower). \\
+
+\cprInlineCode{compression\_model\_name} \newline
+(TS: \cprInlineCode{compressionModelName}) &
+\cprInlineCode{"latte\_v1"} &
+Which model to use (see below). \\
+
+\cprInlineCode{heuristic\_chunking} \newline
+(TS: \cprInlineCode{heuristicChunking}) &
+\cprInlineCode{None} &
+Structure-aware chunking — useful for Markdown, code, legal docs. \\
+
+\cprInlineCode{disable\_placeholders} \newline
+(TS: \cprInlineCode{disablePlaceholders}) &
+\cprInlineCode{None} &
+Drop placeholder markers (\cprInlineCode{<\dots>}) from removed spans. \\
+
+\bottomrule
+\end{longtable}
+
+% ===========================================================================
+\section{Choose a model}\label{sec:models}
+
+\begin{itemize}\itemsep1pt
+    \item \cprInlineCode{latte\_v1} — the default. Best quality on
+          long-form prose, RAG snippets, and tool outputs.
+    \item \cprInlineCode{latte\_v2} — faster variant.
+          Lower latency for high-throughput agent loops and tight P99
+          budgets.
+    \item \textbf{Agentic variants} (\cprInlineCode{hcc\_}, \cprInlineCode{toc\_},
+          \cprInlineCode{tdc\_} prefixed) target chat history, tool
+          outputs, and tool discovery respectively — see the framework
+          PDFs below.
+\end{itemize}
+
+\begin{cprNoteBox}
+\textbf{Quick rule:} start with defaults (\cprInlineCode{latte\_v1},
+ratio \cprInlineCode{0.5}). Drop to \cprInlineCode{latte\_v2} if you
+need lower latency. Tune \cprInlineCode{target\_compression\_ratio}
+based on your eval scores.
+\end{cprNoteBox}
+
+% ===========================================================================
+\section{Pick the right framework integration}
+
+Already on a framework? Skip the plumbing — each integration has its
+own short PDF.
+
+{\sloppy
+\begin{itemize}\itemsep1pt
+    \item \textbf{LangChain} — drop-in document compressor and
+          retriever wrapper.
+          (\cprInlineCode{python\_langchain},
+          \cprInlineCode{typescript\_langchain})
+    \item \textbf{LangGraph} — long-running agent memory compression
+          for stores, checkpoints, and handoffs.
+          (\cprInlineCode{python\_langgraph},
+          \cprInlineCode{typescript\_langgraph})
+    \item \textbf{LlamaIndex} — node postprocessor, chat memory, and
+          query-engine wrappers.
+          (\cprInlineCode{python\_llamaindex},
+          \cprInlineCode{typescript\_llamaindex})
+    \item \textbf{LiteLLM proxy} — server-side guardrail that
+          compresses every request flowing through your proxy.
+          (\cprInlineCode{python\_litellm})
+\end{itemize}
+\par}
+
+Questions, pricing, or a custom deployment? Reach us at
+\href{https://compresr.ai}{compresr.ai} or
+\href{mailto:founders@compresr.ai}{founders@compresr.ai}.
+
+\end{document}

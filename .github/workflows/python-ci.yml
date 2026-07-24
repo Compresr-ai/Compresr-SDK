@@ -12,10 +12,10 @@ jobs:
       run:
         working-directory: python
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       
@@ -46,7 +46,7 @@ jobs:
     env:
       HAS_API_KEY: ${{ secrets.COMPRESR_API_KEY != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Print runner IP (for Cloudflare whitelist)
         run: |
@@ -58,7 +58,7 @@ jobs:
           echo "================================"
       
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
       

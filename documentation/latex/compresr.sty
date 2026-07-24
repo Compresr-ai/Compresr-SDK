@@ -1,0 +1,190 @@
+% compresr.sty — shared style/preamble for all Compresr SDK documentation PDFs.
+% Provides: layout, fonts, code listings (Python/TS/YAML/JSON/Bash), colored
+% boxes for notes/warnings, hyperlinks, title block macros, and the standard
+% header/footer used by every PDF in this set.
+
+\ProvidesPackage{compresr}[2026/06/12 Compresr SDK documentation style]
+
+% ── Layout & fonts ─────────────────────────────────────────────────────────
+\RequirePackage[a4paper,margin=1.4cm,top=1.2cm,bottom=1.4cm,headheight=12pt,
+                headsep=6pt,footskip=18pt]{geometry}
+\RequirePackage[T1]{fontenc}
+\RequirePackage{lmodern}
+\RequirePackage{microtype}
+\RequirePackage{parskip}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{2pt plus 1pt minus 0.5pt}
+\renewcommand{\baselinestretch}{0.97}
+
+% ── Color palette ──────────────────────────────────────────────────────────
+\RequirePackage[dvipsnames,svgnames,table]{xcolor}
+\definecolor{cprBrand}{HTML}{2D62F4}
+\definecolor{cprAccent}{HTML}{6A4CFF}
+\definecolor{cprInk}{HTML}{16191E}
+\definecolor{cprMuted}{HTML}{5A6371}
+\definecolor{cprBg}{HTML}{F5F7FB}
+\definecolor{cprNote}{HTML}{E8F0FE}
+\definecolor{cprWarn}{HTML}{FFF4E5}
+\definecolor{cprWarnBorder}{HTML}{D58512}
+\definecolor{cprCodeBg}{HTML}{F7F8FA}
+\definecolor{cprCodeBorder}{HTML}{E1E4EB}
+\definecolor{cprKeyword}{HTML}{1F4FBA}
+\definecolor{cprString}{HTML}{0F7B3F}
+\definecolor{cprComment}{HTML}{8A8A8A}
+\definecolor{cprType}{HTML}{8B3FB7}
+
+% ── Hyperlinks ─────────────────────────────────────────────────────────────
+\RequirePackage[hidelinks,colorlinks=true,
+    linkcolor=cprBrand,citecolor=cprBrand,urlcolor=cprBrand]{hyperref}
+
+% ── Headers & footers ──────────────────────────────────────────────────────
+\RequirePackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\fancyhead[L]{\small\textcolor{cprMuted}{\@cprHeader}}
+\fancyhead[R]{\small\textcolor{cprMuted}{Compresr SDK}}
+\fancyfoot[C]{\small\textcolor{cprMuted}{\thepage}}
+
+\makeatletter
+\newcommand{\@cprHeader}{Compresr Documentation}
+\newcommand{\cprSetHeader}[1]{\renewcommand{\@cprHeader}{#1}}
+\makeatother
+
+% ── Section formatting (compact) ───────────────────────────────────────────
+\RequirePackage{titlesec}
+\titleformat{\section}{\color{cprBrand}\large\bfseries}{\thesection}{0.5em}{}
+\titleformat{\subsection}{\color{cprInk}\normalsize\bfseries}{\thesubsection}{0.4em}{}
+\titleformat{\subsubsection}{\color{cprAccent}\small\bfseries}{\thesubsubsection}{0.3em}{}
+\titlespacing*{\section}{0pt}{8pt plus 2pt minus 1pt}{2pt}
+\titlespacing*{\subsection}{0pt}{6pt plus 1pt minus 1pt}{1pt}
+\titlespacing*{\subsubsection}{0pt}{4pt plus 1pt minus 1pt}{1pt}
+
+% ── Code listings ──────────────────────────────────────────────────────────
+\RequirePackage{listings}
+\lstdefinelanguage{compresrJSON}{
+    sensitive=true,
+    morestring=[b]",
+    morecomment=[l]{//},
+}
+
+\lstdefinestyle{cprBase}{
+    backgroundcolor=\color{cprCodeBg},
+    basicstyle=\ttfamily\scriptsize\color{cprInk},
+    keywordstyle=\color{cprKeyword}\bfseries,
+    commentstyle=\color{cprComment}\itshape,
+    stringstyle=\color{cprString},
+    showstringspaces=false,
+    breaklines=true,
+    breakatwhitespace=false,
+    columns=fullflexible,
+    keepspaces=true,
+    frame=single,
+    framesep=2pt,
+    framerule=0.3pt,
+    rulecolor=\color{cprCodeBorder},
+    xleftmargin=4pt,
+    xrightmargin=2pt,
+    aboveskip=3pt,
+    belowskip=3pt,
+    upquote=true,
+    literate={ä}{{\"a}}1 {ö}{{\"o}}1 {ü}{{\"u}}1
+             {Ä}{{\"A}}1 {Ö}{{\"O}}1 {Ü}{{\"U}}1
+             {≥}{{$\geq$}}1 {≤}{{$\leq$}}1 {≠}{{$\neq$}}1
+             {→}{{$\rightarrow$}}1 {←}{{$\leftarrow$}}1
+             {⇒}{{$\Rightarrow$}}1 {↑}{{$\uparrow$}}1
+             {×}{{$\times$}}1 {–}{{--}}1 {—}{{---}}1
+             {’}{{'}}1 {‘}{{'}}1 {…}{{\ldots}}1,
+}
+
+\lstdefinestyle{python}{style=cprBase,language=Python,
+    morekeywords={async,await,match,case,Self,Final,Literal,Protocol,TypedDict}}
+\lstdefinestyle{typescript}{style=cprBase,
+    keywords={break,case,catch,class,const,continue,debugger,default,delete,
+        do,else,enum,export,extends,false,finally,for,from,function,if,
+        import,in,instanceof,let,new,null,of,return,super,switch,this,throw,
+        true,try,typeof,var,void,while,with,yield,interface,type,readonly,
+        public,private,protected,abstract,implements,as,async,await,is,
+        keyof,namespace,infer,satisfies,unknown,never,any,string,number,
+        boolean,object,bigint,symbol,Promise,Record,Partial,Pick,Omit}}
+\lstdefinestyle{bash}{style=cprBase,language=bash,
+    morekeywords={pip,npm,export,curl,uv,uvx,pipx}}
+\lstdefinestyle{yaml}{style=cprBase,
+    keywords={model_list,litellm_params,guardrails,guardrail_name,guardrail,
+        mode,api_key,api_base,default_on,model,messages,metadata,
+        compression_model_name,target_compression_ratio,coarse,
+        min_chars_to_compress,compress_tool_outputs,compress_system,
+        compress_history,compress_last_user,target_ratio_by_role,
+        fail_closed,cache_ttl,timeout},
+    morecomment=[l]{\#},
+    morestring=[b]",
+    morestring=[b]'}
+\lstdefinestyle{json}{style=cprBase,language=compresrJSON}
+
+\lstnewenvironment{pycode}{\lstset{style=python}}{}
+\lstnewenvironment{tscode}{\lstset{style=typescript}}{}
+\lstnewenvironment{shcode}{\lstset{style=bash}}{}
+\lstnewenvironment{yamlcode}{\lstset{style=yaml}}{}
+\lstnewenvironment{jsoncode}{\lstset{style=json}}{}
+
+% ── Callout boxes (note / warning / tip) ───────────────────────────────────
+\RequirePackage[most]{tcolorbox}
+\newtcolorbox{cprNoteBox}{
+    enhanced,
+    colback=cprNote,colframe=cprBrand,
+    boxrule=0.4pt,arc=1.5pt,
+    left=5pt,right=5pt,top=2pt,bottom=2pt,
+    fontupper=\small,
+    title=\textbf{Note},
+    fonttitle=\bfseries\footnotesize\color{cprBrand},
+    coltitle=cprBrand,
+    attach boxed title to top left={xshift=5pt,yshift=-5pt},
+    boxed title style={colback=white,colframe=cprBrand,boxrule=0.3pt,arc=1pt},
+    breakable,
+}
+\newtcolorbox{cprWarnBox}{
+    enhanced,
+    colback=cprWarn,colframe=cprWarnBorder,
+    boxrule=0.4pt,arc=1.5pt,
+    left=5pt,right=5pt,top=2pt,bottom=2pt,
+    fontupper=\small,
+    title=\textbf{Watch out},
+    fonttitle=\bfseries\footnotesize\color{cprWarnBorder},
+    coltitle=cprWarnBorder,
+    attach boxed title to top left={xshift=5pt,yshift=-5pt},
+    boxed title style={colback=white,colframe=cprWarnBorder,boxrule=0.3pt,arc=1pt},
+    breakable,
+}
+
+% ── Tables (compact) ───────────────────────────────────────────────────────
+\RequirePackage{booktabs}
+\RequirePackage{array}
+\RequirePackage{tabularx}
+\RequirePackage{longtable}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\AtBeginEnvironment{longtable}{\footnotesize\renewcommand{\arraystretch}{1.05}}
+\AtBeginEnvironment{tabularx}{\small\renewcommand{\arraystretch}{1.05}}
+\setlength{\LTpre}{2pt}
+\setlength{\LTpost}{2pt}
+\RequirePackage{etoolbox}
+
+% ── Title block macro ──────────────────────────────────────────────────────
+\makeatletter
+\newcommand{\cprTitleBlock}[3]{%
+    {\noindent\textcolor{cprMuted}{\footnotesize #1}\par}
+    \vspace{0pt}
+    {\noindent\LARGE\bfseries\color{cprInk} #2\par}
+    \vspace{2pt}
+    {\noindent\small\color{cprMuted} #3\par}
+    \vspace{6pt}
+    \hrule height 1pt depth 0pt
+    \vspace{6pt}
+}
+\makeatother
+
+% ── Misc helpers ───────────────────────────────────────────────────────────
+\newcommand{\cprInlineCode}[1]{\colorbox{cprCodeBg}{\ttfamily\small #1}}
+\let\code\cprInlineCode
+
+\endinput

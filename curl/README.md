@@ -19,21 +19,7 @@ Get your API key from [compresr.ai](https://compresr.ai):
 export COMPRESR_API_KEY="cmp_your_api_key_here"
 ```
 
-### 3. Agnostic Compression (No Query Needed)
-
-Compress raw text (system prompts, documents) without a specific question. Removes less important tokens while preserving meaning.
-
-```bash
-curl -X POST "https://api.compresr.ai/api/compress/question-agnostic/" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: $COMPRESR_API_KEY" \
-  -d '{
-    "context": "Your long context that needs compression...",
-    "compression_model_name": "espresso_v1"
-  }'
-```
-
-### 4. Query-Specific Compression
+### 3. Query-Specific Compression
 
 Compress text while preserving tokens relevant to a specific query. Ideal for RAG/QA pipelines where you want to shrink retrieved passages before sending to an LLM.
 
@@ -44,11 +30,11 @@ curl -X POST "https://api.compresr.ai/api/compress/question-specific/" \
   -d '{
     "context": "Your long context with multiple topics...",
     "query": "What is the main conclusion?",
-    "compression_model_name": "latte_v1"
+    "compression_model_name": "latte_v2"
   }'
 ```
 
-### 5. Coarse-Grained Compression (Faster)
+### 4. Coarse-Grained Compression (Faster)
 
 Use `coarse=true` for paragraph-level compression (faster) instead of token-level (default).
 
@@ -59,25 +45,20 @@ curl -X POST "https://api.compresr.ai/api/compress/question-specific/" \
   -d '{
     "context": "Your long context...",
     "query": "What is Python?",
-    "compression_model_name": "latte_v1",
+    "compression_model_name": "latte_v2",
     "coarse": true
   }'
 ```
 
 ## Available Scripts
 
-### Agnostic Compression (no query needed)
+### Query-Specific Compression
 
 | Script | Description |
 |--------|-------------|
 | `compress.sh` | Compress single context |
 | `compress_batch.sh` | Compress multiple contexts (list input) |
 | `compress_stream.sh` | Stream compression (real-time) |
-
-### Query-Specific Compression (requires query)
-
-| Script | Description |
-|--------|-------------|
 | `compress_qs.sh` | Query-specific compression |
 
 ### Utilities
@@ -94,10 +75,9 @@ curl -X POST "https://api.compresr.ai/api/compress/question-specific/" \
 
 | Model | Query | Best For |
 |-------|-------|----------|
-| `espresso_v1` | Not needed | System prompts, documents, general context |
-| `latte_v1` | **Required** | RAG / QA — preserve answer-relevant tokens |
+| `latte_v2` | **Required** | RAG / QA — preserve answer-relevant tokens |
 
-### Coarse Parameter (latte_v1 only)
+### Coarse Parameter
 
 | coarse | Level | Speed | Best For |
 |--------|-------|-------|----------|
@@ -123,7 +103,6 @@ export COMPRESR_API_KEY="cmp_your_api_key_here"
 {
   "success": true,
   "data": {
-    "original_context": "Your long context...",
     "compressed_context": "Compressed version...",
     "original_tokens": 150,
     "compressed_tokens": 75,

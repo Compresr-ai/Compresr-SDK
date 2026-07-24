@@ -9,11 +9,14 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Check for API keys
         run: |
-          if grep -rE 'cmp_[a-zA-Z0-9_-]{30,}' --include="*.py" --include="*.sh" . | \
+          if grep -rE 'cmp_[a-zA-Z0-9_-]{30,}' \
+                --include="*.py" --include="*.sh" \
+                --include="*.ts" --include="*.tsx" --include="*.js" --include="*.mjs" --include="*.cjs" \
+                --include="*.json" --include="*.yml" --include="*.yaml" --include="*.md" --include="*.ipynb" . | \
              grep -v '.env.example' | \
              grep -v 'cmp_your_api_key' | \
              grep -v 'cmp_xxx' | \

@@ -1,66 +1,33 @@
-/**
- * Compression schemas
- *
- * Schemas for compression endpoints, matching backend exactly.
- */
+/** Compression schemas — mirror backend. */
 import { z } from 'zod';
+
 import { BaseResponseSchema } from './common.js';
 
-// =============================================================================
-// Request Schemas
-// =============================================================================
-
-/**
- * Compress request schema (single context only)
- * For multiple contexts, use the /batch endpoint.
- */
 export const CompressRequestSchema = z.object({
   context: z.string().min(1, 'context must not be empty'),
-  compression_model_name: z.string(),
   query: z.string().min(1, 'query must not be empty').optional(),
+  compression_model_name: z.string(),
   target_compression_ratio: z.number().nonnegative().optional(),
   coarse: z.boolean().optional(),
   heuristic_chunking: z.boolean().optional(),
   disable_placeholders: z.boolean().optional(),
+  // latte_v2-only knobs. Backend returns 422 if sent to a model that
+  // doesn't support them (currently latte_v2 only).
+  dynamic: z.boolean().optional(),
+  dynamic_min_ratio: z.number().optional(),
+  dynamic_max_ratio: z.number().optional(),
   source: z.string().default('sdk:typescript'),
 });
 
 export type CompressRequest = z.infer<typeof CompressRequestSchema>;
 
-/**
- * Agnostic batch input (no query required)
- */
-export const AgnosticBatchInputSchema = z.object({
-  context: z.string().min(1, 'context must not be empty'),
-});
-
-export type AgnosticBatchInput = z.infer<typeof AgnosticBatchInputSchema>;
-
-/**
- * Agnostic batch compression request
- */
-export const AgnosticBatchRequestSchema = z.object({
-  inputs: z.array(AgnosticBatchInputSchema).min(1).max(100),
-  compression_model_name: z.string(),
-  target_compression_ratio: z.number().nonnegative().optional(),
-  source: z.string().default('sdk:typescript'),
-});
-
-export type AgnosticBatchRequest = z.infer<typeof AgnosticBatchRequestSchema>;
-
-/**
- * Query-specific batch compression input (query required)
- */
 export const CompressBatchInputSchema = z.object({
   context: z.string().min(1, 'context must not be empty'),
-  query: z.string().min(1, 'query must not be empty'),
+  query: z.string().min(1, 'query must not be empty').optional(),
 });
 
 export type CompressBatchInput = z.infer<typeof CompressBatchInputSchema>;
 
-/**
- * Batch compression request
- */
 export const CompressBatchRequestSchema = z.object({
   inputs: z.array(CompressBatchInputSchema).min(1).max(100),
   compression_model_name: z.string(),
@@ -68,20 +35,17 @@ export const CompressBatchRequestSchema = z.object({
   coarse: z.boolean().optional(),
   heuristic_chunking: z.boolean().optional(),
   disable_placeholders: z.boolean().optional(),
+  // latte_v2-only knobs (shared across the whole batch).
+  dynamic: z.boolean().optional(),
+  dynamic_min_ratio: z.number().optional(),
+  dynamic_max_ratio: z.number().optional(),
   source: z.string().default('sdk:typescript'),
 });
 
 export type CompressBatchRequest = z.infer<typeof CompressBatchRequestSchema>;
 
-// =============================================================================
-// Result Schemas
-// =============================================================================
-
-/**
- * Single compression result
- */
 export const CompressResultSchema = z.object({
-  original_context: z.string(),
+  original_context: z.string().nullish(),
   compressed_context: z.string(),
   original_tokens: z.number(),
   compressed_tokens: z.number(),
@@ -93,11 +57,8 @@ export const CompressResultSchema = z.object({
 
 export type CompressResult = z.infer<typeof CompressResultSchema>;
 
-/**
- * Batch item result
- */
 export const CompressBatchItemResultSchema = z.object({
-  original_context: z.string(),
+  original_context: z.string().nullish(),
   compressed_context: z.string(),
   original_tokens: z.number(),
   compressed_tokens: z.number(),
@@ -108,9 +69,6 @@ export const CompressBatchItemResultSchema = z.object({
 
 export type CompressBatchItemResult = z.infer<typeof CompressBatchItemResultSchema>;
 
-/**
- * Batch compression result with aggregated metrics
- */
 export const CompressBatchResultSchema = z.object({
   results: z.array(CompressBatchItemResultSchema),
   total_original_tokens: z.number(),
@@ -122,22 +80,12 @@ export const CompressBatchResultSchema = z.object({
 
 export type CompressBatchResult = z.infer<typeof CompressBatchResultSchema>;
 
-// =============================================================================
-// Response Schemas
-// =============================================================================
-
-/**
- * Single compression response
- */
 export const CompressResponseSchema = BaseResponseSchema.extend({
   data: CompressResultSchema.nullable(),
 });
 
 export type CompressResponse = z.infer<typeof CompressResponseSchema>;
 
-/**
- * Batch compression response
- */
 export const CompressBatchResponseSchema = BaseResponseSchema.extend({
   data: CompressBatchResultSchema.nullable(),
 });

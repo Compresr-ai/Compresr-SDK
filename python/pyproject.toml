@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "compresr"
-version = "2.5.0"
+version = "2.8.2"
 description = "Python SDK for Compresr - Intelligent prompt compression service"
 readme = "README.md"
-license = "LicenseRef-Proprietary"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.9"
 authors = [
     {name = "Compresr Team", email = "founders@compresr.ai"}
@@ -29,6 +30,16 @@ classifiers = [
 dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.10.0",
+    # The agents layer ships as part of the core SDK so `pip install compresr`
+    # is enough — engine, Anthropic / OpenAI / Gemini providers, and the
+    # Tavily + Brave search tools are all available out of the box.
+    "langchain>=1.0",
+    "langchain-core>=0.3",
+    "langchain-anthropic>=1.0",
+    "langchain-openai>=0.3",
+    "langchain-google-genai>=4.0",
+    "langchain-tavily>=0.1",
+    "langchain-community>=0.3",
 ]
 
 [project.optional-dependencies]
@@ -43,15 +54,63 @@ dev = [
     "mypy>=1.0.0",
     "python-dotenv>=1.0.0",
 ]
+# Genuine optional integrations outside the agents layer.
+langgraph = [
+    "langgraph>=0.2",
+]
+llamaindex = [
+    "llama-index-core>=0.11",
+]
+litellm = [
+    # The guardrail imports `fastapi` directly (via litellm.proxy.*), which is
+    # only pulled in by the `[proxy]` extra. Without `[proxy]` users hit
+    # ModuleNotFoundError: fastapi at import time.
+    "litellm[proxy]>=1.79",
+]
+# Amazon Bedrock AgentCore web search (WebSearchTool.agentcore). Optional
+# because it requires AWS gateway provisioning; a bare install still imports.
+agentcore = [
+    "mcp>=1.0",
+    "nest-asyncio>=1.6",
+]
+all = [
+    "langgraph>=0.2",
+    "llama-index-core>=0.11",
+    "litellm[proxy]>=1.79",
+    "mcp>=1.0",
+    "nest-asyncio>=1.6",
+]
+# Back-compat aliases — these used to gate the agents layer; everything they
+# pulled in is now part of the base install, so they are no-ops kept so old
+# `pip install "compresr[agents-all]"` commands still succeed without error.
+langchain = []
+agents = []
+agents-anthropic = []
+agents-openai = []
+agents-gemini = []
+agents-tavily = []
+agents-brave = []
+agents-all = []
 
 [project.urls]
 Homepage = "https://compresr.ai"
 Documentation = "https://compresr.ai/docs"
-Repository = "https://github.com/compresr/sdk"
-Issues = "https://github.com/compresr/sdk/issues"
+Repository = "https://github.com/Compresr-ai/Compresr-SDK"
+Issues = "https://github.com/Compresr-ai/Compresr-SDK/issues"
 
-[tool.setuptools]
-packages = ["compresr", "compresr.services", "compresr.schemas", "compresr.exceptions"]
+[project.scripts]
+compresr-sdk = "compresr.__main__:main"
+compresr-litellm = "compresr.integrations.litellm.cli:main"
+install-compresr-shim = "compresr.integrations.litellm.shim_installer:main"
+
+[tool.setuptools.packages.find]
+# Autodiscover every `compresr` subpackage so newly added ones (e.g.
+# `compresr.agents.research`) ship automatically. A previous hand-maintained
+# `packages = [...]` allowlist silently dropped packages that weren't added to
+# it by hand. The `compresr*` filter keeps sibling dirs (tests, tutorial,
+# litellm_shim) out of the distribution.
+where = ["."]
+include = ["compresr*"]
 
 [tool.setuptools.package-data]
 compresr = ["py.typed"]
@@ -64,6 +123,9 @@ include = '\.pyi?$'
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[tool.ruff]
+extend-exclude = ["tutorial", "logs"]
 
 [tool.mypy]
 python_version = "3.9"
@@ -78,4 +140,5 @@ asyncio_mode = "auto"
 addopts = "-v --tb=short"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: live API tests (require COMPRESR_API_KEY + provider keys)",
 ]

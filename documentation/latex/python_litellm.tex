@@ -1,0 +1,214 @@
+\documentclass[10pt]{article}
+\usepackage{compresr}
+\cprSetHeader{Python · LiteLLM Proxy Guardrail}
+
+\begin{document}
+
+\cprTitleBlock{Compresr SDK · Python}{LiteLLM Proxy Guardrail}{%
+    Drop-in LiteLLM guardrail that shrinks prompts, tool outputs, and chat
+    history before they hit the model — cutting token spend and tail latency
+    with zero application code changes.}
+
+% ===========================================================================
+\section{What you get}
+
+Plug Compresr into your existing LiteLLM proxy and every chat-completion
+request is rewritten on the way out: bulky tool outputs and RAG dumps are
+query-aware compressed, your user's last message is preserved verbatim, and
+images, audio, and assistant turns pass through untouched. You keep the same
+proxy URL, same client SDKs, same upstream model. Customers typically see
+\textbf{40–80\% token reduction} on tool-heavy and long-context workloads,
+which translates directly into lower bills and faster responses.
+
+\begin{cprNoteBox}
+Every compressed call returns a \cprInlineCode{compresr\_stats} block
+(messages compressed, tokens saved, ratio, duration) and stamps the
+\cprInlineCode{x-litellm-applied-guardrails} response header. Savings are
+measurable on day one — no extra dashboards required.
+\end{cprNoteBox}
+
+% ===========================================================================
+\section{Install \& start the proxy}
+
+\textbf{Step 1 — install the SDK.} The \cprInlineCode{[litellm]} extra
+brings in \cprInlineCode{litellm[proxy]}. You'll also need credentials for at
+least one upstream provider (e.g.\ \cprInlineCode{OPENAI\_API\_KEY},
+\cprInlineCode{ANTHROPIC\_API\_KEY}).
+
+\begin{shcode}
+pip install 'compresr[litellm]'
+export COMPRESR_API_KEY=cmp_...
+\end{shcode}
+
+\textbf{Step 2 — save your proxy config} as
+\cprInlineCode{proxy\_config.yaml}:
+
+\begin{yamlcode}
+model_list:
+  - model_name: gpt-5-mini
+    litellm_params:
+      model: openai/gpt-5-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+guardrails:
+  - guardrail_name: "compresr"
+    litellm_params:
+      guardrail: compresr
+      mode: pre_call
+      api_key: os.environ/COMPRESR_API_KEY
+      default_on: true
+\end{yamlcode}
+
+\textbf{Step 3 — start the proxy.} The native registration for the Compresr
+guardrail is pending in upstream LiteLLM, so for now \emph{pick one} of the
+two startup paths below. Both load the YAML above and register the guardrail
+in the proxy — choose whichever fits your deployment.
+
+\textit{Option A — bundled \cprInlineCode{compresr-litellm} CLI
+(recommended).} A drop-in replacement for the \cprInlineCode{litellm}
+command. Nothing is written into your \cprInlineCode{litellm} install, so
+it's the safest choice for shared or managed environments and the simplest
+to roll back.
+
+\begin{shcode}
+compresr-litellm --config proxy_config.yaml --port 4000
+\end{shcode}
+
+\textit{Option B — stock \cprInlineCode{litellm} CLI with a one-time shim.}
+Run \cprInlineCode{install-compresr-shim} once to register the guardrail
+with your active \cprInlineCode{litellm} install, then use the
+\cprInlineCode{litellm} command you already have wired up in Docker,
+systemd, or your process manager.
+
+\begin{shcode}
+install-compresr-shim                  # one-time
+litellm --config proxy_config.yaml --port 4000
+\end{shcode}
+
+Either way, any client pointing at \cprInlineCode{http://localhost:4000}
+now runs through Compresr. When the upstream LiteLLM PR lands, you'll be
+able to drop Step 3's extra command and just use \cprInlineCode{litellm}
+directly — your YAML stays unchanged.
+
+% ===========================================================================
+\section{Make a request}
+
+Point any OpenAI-compatible client at the proxy and send a request with a
+chunky tool output. Look at the response headers and the metadata block to
+confirm savings.
+
+\begin{shcode}
+curl -i http://localhost:4000/v1/chat/completions \
+  -H "Authorization: Bearer sk-local" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-5-mini",
+    "messages": [
+      {"role": "user", "content": "What did the customer say about pricing?"},
+      {"role": "assistant", "tool_calls": [
+        {"id": "t1", "type": "function",
+         "function": {"name": "search_crm", "arguments": "{}"}}]},
+      {"role": "tool", "tool_call_id": "t1", "name": "search_crm",
+       "content": "<~2000 chars of CRM dump>"}
+    ]
+  }'
+\end{shcode}
+
+You'll see \cprInlineCode{x-litellm-applied-guardrails: compresr} in the
+response headers, plus a \cprInlineCode{compresr\_stats} block in the
+response metadata reporting tokens saved, average ratio, and how long
+compression took.
+
+\cprInlineCode{sk-local} above is just LiteLLM's local proxy master key
+— configure your own via \cprInlineCode{LITELLM\_MASTER\_KEY} or the
+\cprInlineCode{master\_key} field in \cprInlineCode{proxy\_config.yaml}.
+
+\textit{Not using a proxy?} For direct in-process compression, install
+\cprInlineCode{compresr} and call the SDK directly — see the
+\cprInlineCode{compresr\_core} PDF, or the LangChain / LlamaIndex
+integrations for framework-native interception.
+
+% ===========================================================================
+\section{Knobs you'll actually tune}
+
+Most teams ship with the defaults and only revisit a handful of settings
+when tuning for cost vs.\ fidelity. The table below covers the ones that
+matter.
+
+\renewcommand{\arraystretch}{1.25}
+\begin{longtable}{@{}p{4.2cm} p{2.2cm} p{7.5cm}@{}}
+\toprule
+\textbf{Parameter} & \textbf{Default} & \textbf{What it does} \\
+\midrule
+\endhead
+
+\cprInlineCode{compression\_model\_name} & \cprInlineCode{latte\_v2} &
+Pick your compressor. \cprInlineCode{latte\_v2} is the fast variant;
+\cprInlineCode{latte\_v1} is the original — slightly higher fidelity,
+slower. The proxy defaults to \cprInlineCode{latte\_v2} for inline
+latency; the SDK and framework integrations default to
+\cprInlineCode{latte\_v1}. \\
+
+\cprInlineCode{target\_compression\_ratio} & \cprInlineCode{0.5} &
+How aggressive to compress. Values in $[0,1]$ are the fraction of tokens
+removed (0.5 $\approx$ half the tokens). Values $> 1$ are an Nx factor
+(4 $\approx$ four times smaller). \\
+
+\cprInlineCode{coarse} & \cprInlineCode{true} &
+\cprInlineCode{true} compresses at the paragraph level — faster, blockier.
+\cprInlineCode{false} drops to token level — finer granularity, higher
+latency. \\
+
+\cprInlineCode{compress\_tool\_outputs} & \cprInlineCode{true} &
+Compress \cprInlineCode{tool} / \cprInlineCode{function} messages. This is
+where most of the savings come from in RAG and agent workloads. \\
+
+\cprInlineCode{compress\_system} & \cprInlineCode{false} &
+Opt-in. Turn on when you have long boilerplate system prompts you want
+trimmed for every call. \\
+
+\cprInlineCode{compress\_history} & \cprInlineCode{false} &
+Opt-in. Compresses prior user turns — useful in long multi-turn agent
+loops where history balloons over time. \\
+
+\cprInlineCode{fail\_closed} & \cprInlineCode{false} &
+Default is fail-open: if Compresr is unreachable, your original request is
+forwarded uncompressed so traffic never stops. Set to \cprInlineCode{true}
+to return HTTP 503 instead. \\
+\bottomrule
+\end{longtable}
+
+% ===========================================================================
+\section{Per-request overrides}
+
+Any knob from the YAML can be overridden on a single request via the
+\cprInlineCode{metadata.guardrail\_config} block — handy for A/B testing
+ratios, widening scope on a specific endpoint, or pinning a model variant
+for one call without restarting the proxy.
+
+\begin{jsoncode}
+POST /v1/chat/completions
+{
+  "model": "gpt-5-mini",
+  "messages": [
+    {"role": "user", "content": "What did the customer say about pricing?"},
+    {"role": "assistant", "tool_calls": [
+      {"id": "t1", "type": "function",
+       "function": {"name": "search_crm", "arguments": "{}"}}]},
+    {"role": "tool", "tool_call_id": "t1", "name": "search_crm",
+     "content": "<long CRM dump>"}
+  ],
+  "metadata": {
+    "guardrail_config": {
+      "compression_model_name": "latte_v1",
+      "target_compression_ratio": 4,
+      "compress_history": true
+    }
+  }
+}
+\end{jsoncode}
+
+Overrides apply to that request only and take precedence over the YAML
+defaults.
+
+\end{document}
