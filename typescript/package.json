@@ -189,7 +189,7 @@
     "@typescript-eslint/eslint-plugin": "^8.61.0",
     "@typescript-eslint/parser": "^8.61.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "dotenv": "^16.4.0",
+    "dotenv": "^17.4.2",
     "eslint": "^10.4.1",
     "globals": "^17.6.0",
     "langchain": "^1.4.2",
