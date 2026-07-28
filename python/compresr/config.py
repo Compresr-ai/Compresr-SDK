@@ -23,6 +23,7 @@ class Endpoints:
     COMPRESS: str = "/api/compress/question-specific/"
     COMPRESS_STREAM: str = "/api/compress/question-specific/stream"
     COMPRESS_BATCH: str = "/api/compress/question-specific/batch"
+    COMPRESS_TOOL_OUTPUT: str = "/api/compress/tool-output/"
 
 
 @dataclass(frozen=True)

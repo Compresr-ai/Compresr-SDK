@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "compresr"
-version = "2.8.2"
+version = "2.9.1"
 description = "Python SDK for Compresr - Intelligent prompt compression service"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     {name = "Compresr Team", email = "founders@compresr.ai"}
 ]
@@ -19,7 +19,6 @@ classifiers = [
     "Intended Audience :: Developers",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -30,9 +29,11 @@ classifiers = [
 dependencies = [
     "httpx>=0.27.0",
     "pydantic>=2.10.0",
-    # The agents layer ships as part of the core SDK so `pip install compresr`
-    # is enough — engine, Anthropic / OpenAI / Gemini providers, and the
-    # Tavily + Brave search tools are all available out of the box.
+]
+
+[project.optional-dependencies]
+# Agents layer (engine + LLM providers + search tools) — `pip install compresr[agents]`.
+agents = [
     "langchain>=1.0",
     "langchain-core>=0.3",
     "langchain-anthropic>=1.0",
@@ -41,8 +42,6 @@ dependencies = [
     "langchain-tavily>=0.1",
     "langchain-community>=0.3",
 ]
-
-[project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
@@ -50,7 +49,7 @@ dev = [
     "pytest-timeout>=2.1.0",
     "black>=23.0.0",
     "isort>=5.12.0",
-    "ruff>=0.1.0",
+    "ruff>=0.1.0,<0.16",
     "mypy>=1.0.0",
     "python-dotenv>=1.0.0",
 ]
@@ -73,24 +72,24 @@ agentcore = [
     "mcp>=1.0",
     "nest-asyncio>=1.6",
 ]
+# Hermes plugin: no extra deps, the Hermes runtime provides its modules in-process.
+hermes = []
 all = [
+    "compresr[agents]",
     "langgraph>=0.2",
     "llama-index-core>=0.11",
     "litellm[proxy]>=1.79",
     "mcp>=1.0",
     "nest-asyncio>=1.6",
 ]
-# Back-compat aliases — these used to gate the agents layer; everything they
-# pulled in is now part of the base install, so they are no-ops kept so old
-# `pip install "compresr[agents-all]"` commands still succeed without error.
-langchain = []
-agents = []
-agents-anthropic = []
-agents-openai = []
-agents-gemini = []
-agents-tavily = []
-agents-brave = []
-agents-all = []
+# Back-compat aliases — all resolve to `agents`.
+langchain = ["compresr[agents]"]
+agents-anthropic = ["compresr[agents]"]
+agents-openai = ["compresr[agents]"]
+agents-gemini = ["compresr[agents]"]
+agents-tavily = ["compresr[agents]"]
+agents-brave = ["compresr[agents]"]
+agents-all = ["compresr[agents]"]
 
 [project.urls]
 Homepage = "https://compresr.ai"
@@ -102,6 +101,10 @@ Issues = "https://github.com/Compresr-ai/Compresr-SDK/issues"
 compresr-sdk = "compresr.__main__:main"
 compresr-litellm = "compresr.integrations.litellm.cli:main"
 install-compresr-shim = "compresr.integrations.litellm.shim_installer:main"
+
+# Hermes plugin discovery; inert outside a Hermes process and opt-in there.
+[project.entry-points."hermes_agent.plugins"]
+compresr = "compresr.integrations.hermes.plugin"
 
 [tool.setuptools.packages.find]
 # Autodiscover every `compresr` subpackage so newly added ones (e.g.
@@ -125,10 +128,16 @@ profile = "black"
 line_length = 100
 
 [tool.ruff]
+# Pinned below requires-python to keep pyupgrade off the existing codebase.
+target-version = "py39"
 extend-exclude = ["tutorial", "logs"]
 
+[tool.ruff.lint]
+# Ruff's historical default set; pinned so an unpinned ruff can't drift CI.
+select = ["E4", "E7", "E9", "F"]
+
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

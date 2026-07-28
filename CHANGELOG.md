@@ -5,6 +5,57 @@ This monorepo ships two SDKs with independent versioning.
 - Python — `compresr` on PyPI
 - TypeScript — `@compresr/sdk` on npm
 
+## Python — 2.9.1
+
+- **fix(hermes): harden the fallback redactor.** When Hermes's `agent.redact` is
+  unavailable, the built-in fallback now also masks PEM private-key blocks, Google
+  API keys / OAuth tokens, and credentials embedded in connection-string URIs —
+  closing the gaps a finite pattern list left open (Greptile P1).
+- **fix(hermes): correct the recovery-cache wording.** The on-disk recovery cache
+  stores a copy of the original with **secrets/PII masked** (not a raw verbatim
+  copy). The recovery footer and docstrings now say so, matching the actual
+  security behaviour (Greptile P1).
+- **docs(python): fix the install matrix.** The README no longer claims the agents
+  layer ships in the base install — `pip install compresr` is client-only; the
+  provider chat models and web search tools require `compresr[agents]`. Aligns the
+  README with `pyproject.toml` and the 2.9.0 CHANGELOG.
+
+## Python — 2.9.0
+
+- **feat(hermes): Hermes agent integration.** Query-aware **context + tool-output
+  compression** for the Hermes agent, shipped as `compresr.integrations.hermes`
+  (opt-in plugin via the `hermes_agent.plugins` entry point; inert without an API
+  key). Cuts the token cost of large tool outputs and mid-conversation context;
+  fail-open, with secret/PII redaction before anything leaves the process and a
+  recovery cache (secrets/PII masked).
+- **BREAKING — `langchain*` moved to the `agents` extra.** `pip install compresr`
+  is now `httpx` + `pydantic` only. The agents layer (engine, Anthropic / OpenAI /
+  Gemini providers, Tavily / Brave search) now requires
+  **`pip install compresr[agents]`**. This keeps the base install from
+  force-upgrading a host's pinned `openai` / `anthropic`. Back-compat extras
+  (`compresr[langchain]`, `compresr[agents-all]`, …) resolve to `compresr[agents]`.
+  If you use the agents/`CompressionClient(llm=...)` surfaces, add `[agents]` to
+  your install.
+- **BREAKING — minimum Python raised to 3.10** (was 3.9).
+- **fix(deps): security.** Remediated fast-uri (CVE-2026-16221) and
+  @hono/node-server (GHSA-frvp-7c67-39w9) in the TypeScript workspace; pinned
+  ruff's rule set so an unpinned linter can't drift CI.
+
+## Python — 2.8.3 / TypeScript — 1.7.1
+
+- **chore(release): first tag-triggered CI publish.** Releases are now cut by
+  pushing `python-vX.Y.Z` / `typescript-vX.Y.Z` tags on `main`; CI gates on
+  tag-on-main + tag==version, runs unit tests, publishes to PyPI/npm, and
+  creates the GitHub Release. Nothing is published from laptops anymore.
+- **TypeScript: runtime `zod` bumped 3.x → 4.4.3** (Dependabot #39);
+  `mapZodError` migrated to the zod-4 API (`ZodError.issues` — the v3
+  `.errors` alias was removed — and path segments stringified before joining).
+- TypeScript devDependencies: dotenv 17, @types/node 26,
+  @typescript-eslint/parser 8.62.1, @vitest/coverage-v8 4.1.10; lockfile
+  repaired after the Dependabot merge sequence.
+- Python: no functional changes since 2.8.2; republished so the artifact is
+  provably built from `main` by CI.
+
 ## Python — 2.8.0 / TypeScript — 1.7.0
 
 - **feat(agents): add `WebSearchTool.agentcore` (Amazon Bedrock AgentCore web

@@ -1,6 +1,6 @@
 {
   "name": "@compresr/sdk",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "TypeScript SDK for Compresr - Intelligent context compression to reduce LLM API costs by 30-70%",
   "author": "Compresr Team <founders@compresr.ai>",
   "license": "Apache-2.0",
@@ -175,7 +175,7 @@
     "prepublishOnly": "npm run clean && npm run build && npm run test"
   },
   "dependencies": {
-    "zod": "^3.23.0"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -185,11 +185,11 @@
     "@langchain/openai": "^1.4.7",
     "@langchain/tavily": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@types/node": "^25.9.3",
+    "@types/node": "^26.1.0",
     "@typescript-eslint/eslint-plugin": "^8.61.0",
     "@typescript-eslint/parser": "^8.61.0",
     "@vitest/coverage-v8": "^4.1.8",
-    "dotenv": "^16.4.0",
+    "dotenv": "^17.4.2",
     "eslint": "^10.4.1",
     "globals": "^17.6.0",
     "langchain": "^1.4.2",
@@ -205,6 +205,7 @@
     "compresr-sdk": "./bin/compresr-sdk.cjs"
   },
   "overrides": {
-    "@hono/node-server": "^2.0.5"
+    "@hono/node-server": "^2.0.5",
+    "fast-uri": "^3.1.4"
   }
 }

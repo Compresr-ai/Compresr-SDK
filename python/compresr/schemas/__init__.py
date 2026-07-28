@@ -5,6 +5,11 @@ in :mod:`compresr.exceptions` to keep the data-shape layer and the
 error-handling layer cleanly separated.
 """
 
+from .agentic import (
+    CompressToolOutputRequest,
+    CompressToolOutputResponse,
+    CompressToolOutputResult,
+)
 from .base import BaseResponse, MessageResponse
 from .inference import (
     CompressBatchInput,
@@ -31,6 +36,9 @@ __all__ = [
     "CompressBatchResult",
     "CompressBatchItemResult",
     "CompressBatchResponse",
+    "CompressToolOutputRequest",
+    "CompressToolOutputResult",
+    "CompressToolOutputResponse",
     "MoneyBalanceResponse",
     "MoneyBalanceResult",
 ]
