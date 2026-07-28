@@ -1,6 +1,6 @@
 """Shared base for compression clients."""
 
-from typing import Generator, Optional
+from typing import Any, Dict, Generator, Optional
 
 from pydantic import ValidationError as PydanticValidationError
 
@@ -23,20 +23,24 @@ class BaseCompressionClient(HTTPClient):
         dynamic: Optional[bool] = None,
         dynamic_min_ratio: Optional[float] = None,
         dynamic_max_ratio: Optional[float] = None,
+        source: Optional[str] = None,
     ) -> CompressRequest:
+        fields: Dict[str, Any] = dict(
+            context=context,
+            query=query,
+            compression_model_name=compression_model_name,
+            target_compression_ratio=target_compression_ratio,
+            coarse=coarse,
+            heuristic_chunking=heuristic_chunking,
+            disable_placeholders=disable_placeholders,
+            dynamic=dynamic,
+            dynamic_min_ratio=dynamic_min_ratio,
+            dynamic_max_ratio=dynamic_max_ratio,
+        )
+        if source is not None:
+            fields["source"] = source
         try:
-            return CompressRequest(
-                context=context,
-                query=query,
-                compression_model_name=compression_model_name,
-                target_compression_ratio=target_compression_ratio,
-                coarse=coarse,
-                heuristic_chunking=heuristic_chunking,
-                disable_placeholders=disable_placeholders,
-                dynamic=dynamic,
-                dynamic_min_ratio=dynamic_min_ratio,
-                dynamic_max_ratio=dynamic_max_ratio,
-            )
+            return CompressRequest(**fields)
         except PydanticValidationError as e:
             raise ValidationError(str(e)) from e
 

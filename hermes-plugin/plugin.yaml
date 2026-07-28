@@ -1,0 +1,13 @@
+name: compresr
+version: 1.0.0
+description: >-
+  Query-aware context + tool-output compression via Compresr (YC W26).
+  Cuts token cost of context compaction and large tool outputs; fail-open,
+  inert without an API key.
+author: Compresr
+homepage: https://compresr.ai
+requires_env:
+  - name: COMPRESR_API_KEY
+    description: "Compresr API key (starts with cmp_)"
+    url: "https://compresr.ai"
+    secret: true

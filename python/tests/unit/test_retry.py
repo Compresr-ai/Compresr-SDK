@@ -113,7 +113,7 @@ class TestSyncRetry:
             _http_error(503, {"error": "busy", "code": "service_unavailable"}),
             _http_error(503, {"error": "busy", "code": "service_unavailable"}),
             MagicMock(
-                read=lambda: b'{"success": true, "data": '
+                read=lambda *a: b'{"success": true, "data": '
                 b'{"compressed_context": "c", "original_tokens": 100, '
                 b'"compressed_tokens": 50, "actual_compression_ratio": 0.5, '
                 b'"tokens_saved": 50, "duration_ms": 1}}'
@@ -147,7 +147,7 @@ class TestSyncRetry:
         responses: List[Any] = [
             _http_error(429, {"error": "rate", "code": "rate_limit_exceeded"}),
             MagicMock(
-                read=lambda: b'{"success": true, "data": '
+                read=lambda *a: b'{"success": true, "data": '
                 b'{"compressed_context": "c", "original_tokens": 100, '
                 b'"compressed_tokens": 50, "actual_compression_ratio": 0.5, '
                 b'"tokens_saved": 50, "duration_ms": 1}}'
@@ -221,7 +221,7 @@ class TestSyncRetry:
         responses: List[Any] = [
             _http_error(503, {"error": "busy", "code": "service_unavailable"}, retry_after="0.1"),
             MagicMock(
-                read=lambda: b'{"success": true, "data": '
+                read=lambda *a: b'{"success": true, "data": '
                 b'{"compressed_context": "c", "original_tokens": 100, '
                 b'"compressed_tokens": 50, "actual_compression_ratio": 0.5, '
                 b'"tokens_saved": 50, "duration_ms": 1}}'

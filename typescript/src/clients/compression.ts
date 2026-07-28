@@ -301,10 +301,10 @@ function resolveQueryList(
 
 function mapZodError(error: unknown): unknown {
   if (error instanceof ZodError) {
-    const first = error.errors[0];
+    const first = error.issues[0];
     return new ValidationError(
       first?.message ?? 'Validation failed',
-      first?.path.join('.')
+      first?.path.map(String).join('.')
     );
   }
   return error;

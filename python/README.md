@@ -293,23 +293,24 @@ except CompresrError as e:
 
 ## Framework integrations
 
-The agents layer ships in the base install — `pip install compresr` is enough to get `CompressionClient`, all three provider chat models (Anthropic / OpenAI / Gemini), and both web search tools (Tavily + Brave).
+The base install — `pip install compresr` — is `httpx` + `pydantic` only, giving you `CompressionClient` and the raw compression API. The **agents layer** (all three provider chat models — Anthropic / OpenAI / Gemini — both web search tools (Tavily + Brave), and the `CompressionClient(llm=...)` surfaces) requires the `agents` extra:
 
-Genuinely optional integrations beyond the agents layer:
+```bash
+pip install "compresr[agents]"
+```
+
+This keeps the base install from force-upgrading a host's pinned `openai` / `anthropic`. Genuinely optional integrations beyond the agents layer:
 
 | Extra | Pulls in |
 |---|---|
+| `compresr[agents]` | `langchain*` (provider chat models, web search, agent surfaces) |
 | `compresr[langgraph]` | `langgraph` (LangGraph checkpoint serializer, store, handoff tool) |
 | `compresr[llamaindex]` | `llama-index-core` (node postprocessor, memory block, tool wrapper) |
 | `compresr[litellm]` | `litellm[proxy]` (LiteLLM proxy guardrail) |
 | `compresr[agentcore]` | `mcp`, `nest-asyncio` (Amazon Bedrock AgentCore web search) |
-| `compresr[all]` | all three above |
+| `compresr[all]` | all of the above |
 
-```bash
-pip install "compresr[langgraph]"
-```
-
-Old `compresr[agents]` / `compresr[agents-anthropic]` / `compresr[agents-all]` / `compresr[langchain]` install commands still resolve (no-op extras kept for back-compat) — everything they used to pull in is now in the base install.
+Old `compresr[agents-anthropic]` / `compresr[agents-all]` / `compresr[langchain]` install commands still resolve (back-compat aliases that all pull in `compresr[agents]`).
 
 ### LangChain — middleware + tool wrapper + retriever
 

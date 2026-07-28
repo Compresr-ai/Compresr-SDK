@@ -6,6 +6,8 @@ Only the question-specific endpoints are exposed; pass any
 
 from typing import Any, Dict, Generator, List, Optional, Union
 
+from pydantic import ValidationError as PydanticValidationError
+
 from ..config import ENDPOINTS
 from ..exceptions import ValidationError
 from ..retry import RetryConfig
@@ -14,6 +16,8 @@ from ..schemas import (
     CompressBatchRequest,
     CompressBatchResponse,
     CompressResponse,
+    CompressToolOutputRequest,
+    CompressToolOutputResponse,
     StreamChunk,
 )
 from .base import BaseCompressionClient
@@ -149,6 +153,7 @@ class CompressionClient(BaseCompressionClient):
         dynamic: Optional[bool] = None,
         dynamic_min_ratio: Optional[float] = None,
         dynamic_max_ratio: Optional[float] = None,
+        source: Optional[str] = None,
     ) -> CompressResponse:
         req = self._build_request(
             context,
@@ -161,6 +166,7 @@ class CompressionClient(BaseCompressionClient):
             dynamic,
             dynamic_min_ratio,
             dynamic_max_ratio,
+            source,
         )
         return self._do_request(req)
 
@@ -176,6 +182,7 @@ class CompressionClient(BaseCompressionClient):
         dynamic: Optional[bool] = None,
         dynamic_min_ratio: Optional[float] = None,
         dynamic_max_ratio: Optional[float] = None,
+        source: Optional[str] = None,
     ) -> CompressResponse:
         req = self._build_request(
             context,
@@ -188,6 +195,7 @@ class CompressionClient(BaseCompressionClient):
             dynamic,
             dynamic_min_ratio,
             dynamic_max_ratio,
+            source,
         )
         return await self._do_compress_async(req)
 
@@ -286,6 +294,68 @@ class CompressionClient(BaseCompressionClient):
         )
         data = await self.post_async(ENDPOINTS.COMPRESS_BATCH, req.model_dump(exclude_none=True))
         return CompressBatchResponse.model_validate(data)
+
+    def compress_tool_output(
+        self,
+        tool_output: Union[str, List[str]],
+        tool_name: str,
+        query: Optional[str] = None,
+        compression_model_name: str = "toc_latte_v2",
+        target_compression_ratio: Optional[float] = None,
+        source: Optional[str] = None,
+    ) -> CompressToolOutputResponse:
+        """Compress a tool's output (or a list of outputs) against its intent.
+
+        ``compressed_output`` in the response mirrors the input type: a string
+        in, a string out; a list in, a list out. Backend is the authority on
+        model names and whether ``query`` is required (``toc_latte_*`` models
+        require it).
+        """
+        req = self._build_tool_output_request(
+            tool_output, tool_name, query, compression_model_name, target_compression_ratio, source
+        )
+        data = self.post(ENDPOINTS.COMPRESS_TOOL_OUTPUT, req.model_dump(exclude_none=True))
+        return CompressToolOutputResponse.model_validate(data)
+
+    async def compress_tool_output_async(
+        self,
+        tool_output: Union[str, List[str]],
+        tool_name: str,
+        query: Optional[str] = None,
+        compression_model_name: str = "toc_latte_v2",
+        target_compression_ratio: Optional[float] = None,
+        source: Optional[str] = None,
+    ) -> CompressToolOutputResponse:
+        req = self._build_tool_output_request(
+            tool_output, tool_name, query, compression_model_name, target_compression_ratio, source
+        )
+        data = await self.post_async(
+            ENDPOINTS.COMPRESS_TOOL_OUTPUT, req.model_dump(exclude_none=True)
+        )
+        return CompressToolOutputResponse.model_validate(data)
+
+    @staticmethod
+    def _build_tool_output_request(
+        tool_output: Union[str, List[str]],
+        tool_name: str,
+        query: Optional[str],
+        compression_model_name: str,
+        target_compression_ratio: Optional[float],
+        source: Optional[str] = None,
+    ) -> CompressToolOutputRequest:
+        fields: Dict[str, Any] = dict(
+            tool_output=tool_output,
+            tool_name=tool_name,
+            query=query,
+            compression_model_name=compression_model_name,
+            target_compression_ratio=target_compression_ratio,
+        )
+        if source is not None:
+            fields["source"] = source
+        try:
+            return CompressToolOutputRequest(**fields)
+        except PydanticValidationError as e:
+            raise ValidationError(str(e)) from e
 
     @staticmethod
     def _build_batch_inputs(

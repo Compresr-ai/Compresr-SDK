@@ -9,7 +9,7 @@ import warnings
 from typing import Any, Dict, Generator, NoReturn, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 import httpx
 
@@ -43,6 +43,22 @@ except Exception:
 
 
 _LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+# Cap response bodies so a hostile base_url can't OOM the client.
+_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """Refuse to follow redirects — stops X-API-Key being re-sent cross-host."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
+def urlopen(req: Request, timeout: Optional[float] = None, context: Any = None) -> Any:
+    """Open *req* without following redirects (no cross-host credential leak)."""
+    opener = build_opener(HTTPSHandler(context=context), _NoRedirectHandler)
+    return opener.open(req, timeout=timeout)
 
 
 class HTTPClient:
@@ -264,11 +280,15 @@ class HTTPClient:
         try:
             ctx = ssl.create_default_context()
             with urlopen(req, timeout=self._timeout, context=ctx) as resp:
-                result: Dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+                raw = resp.read(_MAX_RESPONSE_BYTES + 1)
+                if len(raw) > _MAX_RESPONSE_BYTES:
+                    raise CompresrError("Response exceeded maximum allowed size")
+                result: Dict[str, Any] = json.loads(raw.decode("utf-8"))
                 return result
         except HTTPError as e:
             try:
-                err = json.loads(e.read().decode("utf-8"))
+                raw = e.read(_MAX_RESPONSE_BYTES + 1)
+                err = json.loads(raw.decode("utf-8"))
             except Exception:
                 err = {"error": str(e), "detail": e.reason}
             if "retry_after" not in err:
