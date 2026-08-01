@@ -66,6 +66,18 @@ class TestRegister:
         plugin.register(ctx)
         assert captured == ["cache/compresr/tool-output"]
 
+    def test_register_starts_model_probe(self, plugin, hermes_env, monkeypatch):
+        tool_output = hermes_env.load("tool_output")
+        started: List[bool] = []
+        monkeypatch.setattr(
+            tool_output.ToolOutputCompressor,
+            "start_model_probe",
+            lambda self: started.append(True),
+        )
+        monkeypatch.setenv("COMPRESR_API_KEY", API_KEY)
+        plugin.register(FakeCtx())
+        assert started == [True]
+
     def test_engine_not_registered_without_key(self, plugin):
         ctx = FakeCtx()
         plugin.register(ctx)

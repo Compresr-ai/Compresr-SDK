@@ -41,6 +41,9 @@ def register(ctx: Any) -> None:
 
     compressor = ToolOutputCompressor()
     ctx.register_hook("transform_tool_result", compressor.on_transform_tool_result)
+    # Fail fast on a statically invalid tool_output_model: one background probe
+    # call at startup instead of a silent per-call no-op for the whole session.
+    compressor.start_model_probe()
     if not compressor.api_key:
         logger.info(
             "compresr: tool-output hook loaded but no API key found — inactive. "

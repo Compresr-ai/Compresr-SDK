@@ -121,6 +121,47 @@ class TestCompressWithRecovery:
         assert info["called_api"] is False
         assert "api down" in info["error"]
         assert info["shortened"] is False
+        assert "permanent_error" not in info
+
+    def test_invalid_request_marked_permanent(self, recovery):
+        from compresr.exceptions import ValidationError
+
+        out, info = recovery.compress_with_recovery(
+            query="q",
+            content=LONG_CONTENT,
+            tool_name="grep",
+            cache_id="a3b",
+            client=FakeClient(
+                error=ValidationError("Invalid request: Model 'latte_v2' is not valid")
+            ),
+        )
+        assert out == LONG_CONTENT
+        assert info["permanent_error"] is True
+        assert info["error_type"] == "ValidationError"
+        assert "latte_v2" in info["error"]
+
+    def test_user_actionable_errors_marked_permanent(self, recovery):
+        from compresr.exceptions import (
+            AuthenticationError,
+            InsufficientCreditsError,
+            ScopeError,
+        )
+
+        for exc in (
+            AuthenticationError("Invalid API key"),
+            ScopeError("key lacks tool-output scope"),
+            InsufficientCreditsError("out of credits"),
+        ):
+            out, info = recovery.compress_with_recovery(
+                query="q",
+                content=LONG_CONTENT,
+                tool_name="grep",
+                cache_id="a3c",
+                client=FakeClient(error=exc),
+            )
+            assert out == LONG_CONTENT
+            assert info["permanent_error"] is True
+            assert info["error_type"] == type(exc).__name__
 
     def test_unsuccessful_response_fails_open(self, recovery):
         resp = CompressToolOutputResponse(success=False, message="quota", data=None)
