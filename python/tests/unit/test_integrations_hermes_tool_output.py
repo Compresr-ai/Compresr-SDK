@@ -220,8 +220,159 @@ class TestStatus:
         hook = make_hook()
         status = hook.get_status()
         assert status["active"] is True
+        assert status["config_error"] is None
         assert status["model"] == "toc_latte_v2"
         assert status["calls"] == 0
+
+
+class TestConfigErrorLatch:
+    def _invalid_model_client(self):
+        from compresr.exceptions import ValidationError
+
+        return FakeClient(error=ValidationError("Invalid request: Model 'latte_v2' is not valid"))
+
+    def test_invalid_model_disables_hook_with_one_error(self, make_hook, caplog):
+        client = self._invalid_model_client()
+        hook = make_hook(client=client, COMPRESR_TOOL_OUTPUT_MODEL="latte_v2")
+        with caplog.at_level("ERROR"):
+            assert hook.on_transform_tool_result(tool_name="grep", result=BIG) is None
+            assert hook.on_transform_tool_result(tool_name="grep", result=BIG) is None
+        assert hook.active is False
+        assert "latte_v2" in hook.config_error
+        assert hook.get_status()["config_error"] == hook.config_error
+        # Latched after the first rejection: one API call, one ERROR record.
+        assert len(client.calls) == 1
+        errors = [r for r in caplog.records if r.levelname == "ERROR"]
+        assert len(errors) == 1
+        assert "DISABLED" in errors[0].getMessage()
+
+    def test_transient_error_does_not_latch(self, make_hook):
+        hook = make_hook(client=FakeClient(error=RuntimeError("boom")))
+        assert hook.on_transform_tool_result(tool_name="grep", result=BIG) is None
+        assert hook.active is True
+        assert hook.config_error == ""
+
+    def test_probe_latches_invalid_model(self, make_hook, caplog):
+        client = self._invalid_model_client()
+        hook = make_hook(client=client, COMPRESR_TOOL_OUTPUT_MODEL="latte_v2")
+        with caplog.at_level("ERROR"):
+            hook.probe_model()
+        assert hook.active is False
+        assert len(client.calls) == 1
+        assert "DISABLED" in caplog.text
+
+    def test_probe_runs_for_default_model_and_latches_dead_key(self, make_hook, caplog):
+        from compresr.exceptions import AuthenticationError
+
+        client = FakeClient(error=AuthenticationError("Invalid API key"))
+        hook = make_hook(client=client)
+        with caplog.at_level("ERROR"):
+            hook.probe_model()
+        assert hook.active is False
+        assert len(client.calls) == 1
+        assert "COMPRESR_API_KEY" in hook.config_hint
+
+    def test_auth_error_hint_points_at_key(self, make_hook):
+        from compresr.exceptions import AuthenticationError
+
+        hook = make_hook(client=FakeClient(error=AuthenticationError("Invalid API key")))
+        assert hook.on_transform_tool_result(tool_name="grep", result=BIG) is None
+        assert hook.active is False
+        assert "dashboard/keys" in hook.config_hint
+        assert hook.get_status()["config_hint"] == hook.config_hint
+
+    def test_credits_error_hint_points_at_billing(self, make_hook):
+        from compresr.exceptions import InsufficientCreditsError
+
+        hook = make_hook(client=FakeClient(error=InsufficientCreditsError("out of credits")))
+        assert hook.on_transform_tool_result(tool_name="grep", result=BIG) is None
+        assert "billing" in hook.config_hint
+
+    def test_invalid_model_keeps_config_hint(self, make_hook):
+        hook = make_hook(client=self._invalid_model_client(), COMPRESR_TOOL_OUTPUT_MODEL="latte_v2")
+        assert hook.on_transform_tool_result(tool_name="grep", result=BIG) is None
+        assert "tool_output_" in hook.config_hint
+
+    def test_disable_emits_console_warning(self, make_hook, monkeypatch):
+        import compresr.integrations.hermes.tool_output as mod
+
+        seen = []
+        monkeypatch.setattr(mod, "_emit_console_warning", seen.append)
+        hook = make_hook(client=self._invalid_model_client(), COMPRESR_TOOL_OUTPUT_MODEL="latte_v2")
+        hook.on_transform_tool_result(tool_name="grep", result=BIG)
+        hook.on_transform_tool_result(tool_name="grep", result=BIG)
+        assert len(seen) == 1
+        assert "DISABLED" in seen[0]
+
+    def test_console_warning_uses_host_helper(self, monkeypatch):
+        import sys
+        import types
+
+        from compresr.integrations.hermes.tool_output import _emit_console_warning
+
+        printed = []
+        fake = types.ModuleType("hermes_cli.cli_output")
+        fake.print_warning = printed.append
+        pkg = types.ModuleType("hermes_cli")
+        monkeypatch.setitem(sys.modules, "hermes_cli", pkg)
+        monkeypatch.setitem(sys.modules, "hermes_cli.cli_output", fake)
+        _emit_console_warning("something is off")
+        assert printed == ["something is off"]
+
+    def test_console_warning_reaches_headless_stderr(self, monkeypatch, capsys):
+        """No host helper and no TTY (systemd/cron/gateway): the warning must
+        still land on stderr, unstyled — silence there hides dead keys."""
+        import sys
+
+        from compresr.integrations.hermes.tool_output import _emit_console_warning
+
+        monkeypatch.setitem(sys.modules, "hermes_cli", None)
+        monkeypatch.setitem(sys.modules, "hermes_cli.cli_output", None)
+        monkeypatch.setattr(sys.stderr, "isatty", lambda: False, raising=False)
+        _emit_console_warning("key is dead")
+        err = capsys.readouterr().err
+        assert "⚠ key is dead" in err
+        assert "\033[" not in err
+
+    def test_console_warning_survives_a_closed_stderr(self):
+        """A daemonised parent may close fd 2. Writing into a dead stream
+        leaves CPython unable to flush at shutdown (exit 120), so a warning
+        must not change the process exit code."""
+        import subprocess
+        import sys
+
+        # Import before closing fd 2: the package logs to stderr at import
+        # time, which would dirty the buffer on its own and mask what is
+        # under test here.
+        code = (
+            "from compresr.integrations.hermes.tool_output import "
+            "_emit_console_warning as w; "
+            "import os; os.close(2); w('dead key'); print('ok')"
+        )
+        p = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert p.returncode == 0
+        assert "ok" in p.stdout
+
+    def test_console_warning_honors_no_color_on_a_tty(self, monkeypatch, capsys):
+        import sys
+
+        from compresr.integrations.hermes.tool_output import _emit_console_warning
+
+        monkeypatch.setitem(sys.modules, "hermes_cli", None)
+        monkeypatch.setitem(sys.modules, "hermes_cli.cli_output", None)
+        monkeypatch.setattr(sys.stderr, "isatty", lambda: True, raising=False)
+        monkeypatch.setenv("NO_COLOR", "1")
+        _emit_console_warning("key is dead")
+        assert "\033[" not in capsys.readouterr().err
+
+    def test_probe_ignores_transient_error(self, make_hook):
+        hook = make_hook(
+            client=FakeClient(error=RuntimeError("api down")),
+            COMPRESR_TOOL_OUTPUT_MODEL="toc_other_model",
+        )
+        hook.probe_model()
+        assert hook.active is True
+        assert hook.config_error == ""
 
 
 def test_fallback_redactor_redacts_secrets_and_pii():

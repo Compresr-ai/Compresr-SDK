@@ -8,9 +8,29 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional, Tuple
 
+from compresr.exceptions import (
+    AuthenticationError,
+    InsufficientCreditsError,
+    ModelNotFoundError,
+    ScopeError,
+    ValidationError,
+)
+
 from . import cache
 
 logger = logging.getLogger(__name__)
+
+# Rejections that only user action can fix (a model name the tool-output
+# endpoint doesn't accept, an invalid/expired/underscoped API key, an account
+# out of credits). Unlike transient failures, retrying can never succeed, so
+# callers should stop calling and surface the error instead.
+PERMANENT_API_ERRORS = (
+    ValidationError,
+    ModelNotFoundError,
+    AuthenticationError,
+    ScopeError,
+    InsufficientCreditsError,
+)
 
 # Marks our own footer so the hook never re-compresses an output it produced.
 FOOTER_MARKER = "[compresr:recover]"
@@ -98,6 +118,9 @@ def compress_with_recovery(
     except Exception as e:
         logger.warning("compresr: tool-output API failed (%s) — leaving original", e)
         info["error"] = str(e)
+        if isinstance(e, PERMANENT_API_ERRORS):
+            info["permanent_error"] = True
+            info["error_type"] = type(e).__name__
         return content, info
 
     info["called_api"] = True
@@ -142,6 +165,7 @@ __all__ = [
     "FOOTER_MARKER",
     "FOOTER_TOKEN_BUDGET",
     "DEFAULT_TOOL_OUTPUT_MODEL",
+    "PERMANENT_API_ERRORS",
     "count_tokens",
     "compress_with_recovery",
 ]

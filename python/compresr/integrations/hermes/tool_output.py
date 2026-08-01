@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple, cast
@@ -23,8 +24,10 @@ from . import cache
 from ._config import as_bool, as_float, as_int, opt, read_config_block
 from ._security import resolve_base_url, sanitize_secret
 from .recovery import (
+    _SOURCE_TAG,
     DEFAULT_TOOL_OUTPUT_MODEL,
     FOOTER_MARKER,
+    PERMANENT_API_ERRORS,
     compress_with_recovery,
     count_tokens,
 )
@@ -88,6 +91,27 @@ _PATH_ARG_KEYS = ("file_path", "path", "file", "filename", "directory")
 # Kept in sync with cache._CACHE_SUBDIR; present in host and container paths.
 _CACHE_PATH_MARKER = "cache/compresr/tool-output"
 
+# Actionable next step per permanent-error class, shown alongside the error so
+# the user can fix the config instead of silently running uncompressed.
+_CONFIG_ERROR_HINTS: Dict[str, str] = {
+    "AuthenticationError": (
+        "COMPRESR_API_KEY is invalid or expired — mint a fresh key at "
+        "https://compresr.ai/dashboard/keys and update it in ~/.hermes/.env"
+    ),
+    "ScopeError": (
+        "COMPRESR_API_KEY lacks the required scope — mint a key with "
+        "tool-output access at https://compresr.ai/dashboard/keys"
+    ),
+    "InsufficientCreditsError": (
+        "the Compresr account is out of credits — top up at "
+        "https://compresr.ai/dashboard/billing"
+    ),
+}
+_DEFAULT_CONFIG_HINT = (
+    "check the compresr.tool_output_* settings in config.yaml "
+    f"(tool-output models are toc_*, default {DEFAULT_TOOL_OUTPUT_MODEL})"
+)
+
 # Tool → key holding the plain-text payload inside a JSON envelope.
 _UNWRAPPABLE_JSON_TOOLS: Dict[str, str] = {
     "read_file": "content",
@@ -100,6 +124,47 @@ _UNWRAPPABLE_JSON_TOOLS: Dict[str, str] = {
 # so a recovery read_file re-adds exactly one clean gutter.
 _NUMBERED_JSON_TOOLS = {"read_file"}
 _LINE_GUTTER_RE = re.compile(r"^\d+\|")
+
+
+def _emit_console_warning(text: str) -> None:
+    """Best-effort user-visible warning. Hermes routes ``logging`` to files
+    only, so an interactive user never sees ``logger.error`` — print through
+    the host's own yellow ⚠ helper (TTY/NO_COLOR-aware), falling back to
+    stderr. Headless/gateway runs still get the plain line: a dead key must
+    not be silent just because nobody is attached to a terminal. Never
+    raises."""
+    try:
+        from hermes_cli.cli_output import print_warning
+
+        print_warning(text)
+        return
+    except Exception:
+        pass
+    try:
+        import os
+        import sys
+
+        stream = sys.stderr
+        if stream is None:
+            return
+        # A daemonised parent may have closed fd 2. isatty() returns False
+        # rather than raising there, so the write below would succeed into the
+        # buffer, fail at the syscall, and leave CPython unable to flush at
+        # shutdown — exit code 120 from a warning. Probe the fd first; bail via
+        # the outer except. No fileno (StringIO, capsys) means it is safe.
+        try:
+            fd = stream.fileno()
+        except Exception:
+            fd = None
+        if fd is not None:
+            os.fstat(fd)
+
+        color = stream.isatty() and not os.environ.get("NO_COLOR")
+        line = f"\033[33m⚠ {text}\033[0m" if color else f"⚠ {text}"
+        stream.write(line + "\n")
+        stream.flush()
+    except Exception:
+        pass
 
 
 def _max_recoverable_line_length() -> int:
@@ -212,10 +277,55 @@ class ToolOutputCompressor:
         self.tokens_saved = 0
         self.recoveries = 0
         self._cooldown_until = 0.0
+        self.config_error: str = ""
+        self.config_hint: str = ""
 
     @property
     def active(self) -> bool:
-        return self.enabled and bool(self.api_key)
+        return self.enabled and bool(self.api_key) and not self.config_error
+
+    def _disable_with_config_error(self, msg: str, error_type: str = "") -> None:
+        """A rejection only user action can fix (bad ``tool_output_model``,
+        invalid/expired API key, no credits) can never succeed on retry —
+        disable the hook and say so once, loudly, instead of warning per call
+        while sessions silently run uncompressed."""
+        if self.config_error:
+            return
+        self.config_error = msg
+        self.config_hint = _CONFIG_ERROR_HINTS.get(error_type, _DEFAULT_CONFIG_HINT)
+        text = (
+            f"compresr: {msg} — tool-output compression DISABLED for this "
+            f"session; {self.config_hint}"
+        )
+        logger.error(text)
+        _emit_console_warning(text)
+
+    def probe_model(self) -> None:
+        """Validate the configured key and model with one tiny API call so a
+        dead ``COMPRESR_API_KEY`` or invalid ``tool_output_model`` is reported
+        at startup rather than silently no-opping on every tool call.
+        Transient failures are ignored (fail-open, same as the hook itself)."""
+        if not self.active:
+            return
+        try:
+            self._client.compress_tool_output(
+                tool_output="config validation probe " * 4,
+                tool_name="probe",
+                query="config validation probe",
+                compression_model_name=self.model,
+                source=_SOURCE_TAG,
+            )
+        except PERMANENT_API_ERRORS as e:
+            self._disable_with_config_error(str(e), type(e).__name__)
+        except Exception as e:
+            logger.debug("compresr: config probe inconclusive (%s)", e)
+
+    def start_model_probe(self) -> None:
+        """Run ``probe_model`` on a daemon thread so registration never blocks
+        on the network."""
+        if not self.active:
+            return
+        threading.Thread(target=self.probe_model, name="compresr-model-probe", daemon=True).start()
 
     def _build_client(self) -> Any:
         from compresr import CompressionClient
@@ -344,6 +454,12 @@ class ToolOutputCompressor:
             logger.warning("compresr: tool-output hook error (%s)", e)
             return None
 
+        if info.get("permanent_error"):
+            self.errors += 1
+            self._disable_with_config_error(
+                info.get("error") or "invalid request", info.get("error_type") or ""
+            )
+            return None
         if info.get("error"):
             # Genuine failures arm the cooldown; a benign "no net win" carries
             # skipped_reason instead so it can't suppress later outputs.
@@ -374,6 +490,8 @@ class ToolOutputCompressor:
         return {
             "plugin": "compresr-tool-output",
             "active": self.active,
+            "config_error": self.config_error or None,
+            "config_hint": self.config_hint or None,
             "model": self.model,
             "min_tokens": self.min_tokens,
             "max_cache_mb": self.max_cache_mb,
