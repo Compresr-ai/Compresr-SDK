@@ -197,7 +197,7 @@
     "msw": "^2.2.0",
     "openai": "^6.42.0",
     "tsx": "^4.22.3",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "typescript-eslint": "^8.60.1",
     "vitest": "^4.1.8"
   },
